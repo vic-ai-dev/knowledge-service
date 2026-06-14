@@ -9,9 +9,19 @@ from __future__ import annotations
 
 from typing import Any, AsyncIterator
 
+import openai
 from openai import AsyncClient
 
 from app.libs.base.base_llm import BaseLLM, LLMResponse
+from app.observability import get_logger
+from app.observability.instrumentation import trace_span, log_llm_call
+
+logger = get_logger(__name__)
+
+# 自定义异常，方便调用方捕获 LLM 相关的错误
+class LLMError(RuntimeError):
+    """LLM 调用通用异常。"""
+    pass
 
 
 class OpenAILLM(BaseLLM):
@@ -39,14 +49,70 @@ class OpenAILLM(BaseLLM):
                 import os
                 api_key = os.environ.get("OPENAI_API_KEY", "")
 
+            import httpx
             self._client = AsyncClient(
                 api_key=api_key or "",
                 base_url=self._base_url,
+                http_client=httpx.AsyncClient(trust_env=False),
             )
         return self._client
 
+    # ── API 调用层（分离以支持 mock） ──────────────────────
+
+    async def _call_api(
+        self,
+        messages: list[dict],
+        model: str,
+        temperature: float,
+        max_tokens: int,
+        stream: bool = False,
+    ) -> Any:
+        """执行实际 API 调用，附带完善的错误处理。
+
+        此方法分离以便在单元测试中轻松 mock ``_call_api``，
+        而不需要 mock 整个 ``AsyncClient``。
+
+        Returns:
+            非流式模式返回 ``ChatCompletion`` 对象；
+            流式模式返回 ``Stream[ChatCompletionChunk]``。
+        """
+        client = self._get_client()
+        try:
+            return await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=stream,
+            )
+        except openai.APIStatusError as e:
+            error_detail = self._parse_error_response(e)
+            raise LLMError(
+                f"[OpenAI] API error (HTTP {e.status_code}): {error_detail}"
+            ) from e
+        except openai.APITimeoutError as e:
+            raise LLMError("[OpenAI] Request timed out") from e
+        except openai.APIConnectionError as e:
+            raise LLMError(
+                f"[OpenAI] Connection failed: {e}"
+            ) from e
+
+    def _parse_error_response(self, error: openai.APIStatusError) -> str:
+        """解析 API 错误响应体，提取可读的错误信息。"""
+        try:
+            body = error.response.json()
+            if "error" in body:
+                err = body["error"]
+                if isinstance(err, dict):
+                    return err.get("message", str(err))
+                return str(err)
+            return error.response.text
+        except Exception:
+            return error.response.text or "Unknown error"
+
     # ── BaseLLM 接口实现 ──────────────────────────────────────
 
+    @trace_span("llm_call")
     async def generate(
         self,
         prompt: str | None = None,
@@ -54,21 +120,28 @@ class OpenAILLM(BaseLLM):
         **kwargs: Any,
     ) -> LLMResponse:
         msgs = self._build_messages(prompt, messages)
-        client = self._get_client()
 
-        response = await client.chat.completions.create(
-            model=self.model,
+        response = await self._call_api(
             messages=msgs,
+            model=kwargs.get("model", self.model),
             temperature=kwargs.get("temperature", self._temperature),
             max_tokens=kwargs.get("max_tokens", self._max_tokens),
-            stream=False,
         )
 
         choice = response.choices[0]
+        usage_dict = response.usage.model_dump() if response.usage else None
+        if usage_dict:
+            log_llm_call(
+                self.model,
+                prompt_tokens=usage_dict.get("prompt_tokens"),
+                completion_tokens=usage_dict.get("completion_tokens"),
+                metadata={"provider": "openai"},
+            )
+
         return LLMResponse(
             content=choice.message.content or "",
             model=response.model,
-            usage=response.usage.model_dump() if response.usage else None,
+            usage=usage_dict,
             finish_reason=choice.finish_reason,
         )
 
@@ -79,11 +152,10 @@ class OpenAILLM(BaseLLM):
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         msgs = self._build_messages(prompt, messages)
-        client = self._get_client()
 
-        stream = await client.chat.completions.create(
-            model=self.model,
+        stream = await self._call_api(
             messages=msgs,
+            model=kwargs.get("model", self.model),
             temperature=kwargs.get("temperature", self._temperature),
             max_tokens=kwargs.get("max_tokens", self._max_tokens),
             stream=True,

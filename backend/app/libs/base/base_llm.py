@@ -24,9 +24,39 @@ class BaseLLM(ABC):
     :param kwargs: 额外参数（会在构造时保存，子类可访问 self._kwargs）。
     """
 
+    VALID_ROLES = {"system", "user", "assistant"}
+
     def __init__(self, model: str, **kwargs):
         self.model = model
         self._kwargs = kwargs
+
+    # ── 消息验证 ──────────────────────────────────────────────
+
+    def validate_messages(self, messages: list[dict]) -> None:
+        """验证消息列表的合法性。
+
+        Args:
+            messages: Chat 消息列表。
+
+        Raises:
+            ValueError: 如果消息列表为空、包含非法 role 或 content 为空。
+        """
+        if not messages:
+            raise ValueError("Messages list cannot be empty")
+        if not isinstance(messages, list):
+            raise ValueError("Messages must be a list")
+        for i, msg in enumerate(messages):
+            if not isinstance(msg, dict):
+                raise ValueError(f"Message at index {i} is not a dict")
+            role = msg.get("role")
+            if role not in self.VALID_ROLES:
+                raise ValueError(
+                    f"Message at index {i} has invalid role '{role}'. "
+                    f"Must be one of: {self.VALID_ROLES}"
+                )
+            content = msg.get("content")
+            if not content or not content.strip():
+                raise ValueError(f"Message at index {i} has empty content")
 
     # ── 辅助方法 ──────────────────────────────────────────────
 
@@ -37,10 +67,12 @@ class BaseLLM(ABC):
     ) -> list[dict]:
         """统一构造 chat messages 格式。
 
-        优先使用 ``messages``；退而使用 ``prompt`` 构造单条用户消息。
+        优先使用 ``messages``（附带 validate_messages 校验）；
+        退而使用 ``prompt`` 构造单条用户消息。
         如果两者都未提供则抛出 ValueError。
         """
         if messages is not None:
+            self.validate_messages(messages)
             return messages
         if prompt is not None:
             return [{"role": "user", "content": prompt}]

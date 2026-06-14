@@ -2,7 +2,7 @@
  * Knowledge Service — Overview 系统总览页面 (G1)
  * ============================================================================ */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Statistic, Table, Spin, Alert, Tag, Descriptions } from 'antd';
 import {
   FileTextOutlined,
@@ -10,29 +10,15 @@ import {
   CloudUploadOutlined,
   CheckCircleOutlined,
   BookOutlined,
+  ExperimentOutlined,
   TranslationOutlined,
   ApartmentOutlined,
   RobotOutlined,
-  ExperimentOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
-import type { SystemStats } from '../types';
+import { getConfig, getStats } from '../api/config';
+import type { SystemStats, SystemConfig } from '../types';
 
-const MOCK_STATS: SystemStats = {
-  total_documents: 128,
-  total_chunks: 4823,
-  total_collections: 4,
-  by_category: {
-    employee_handbook: 42,
-    compliance: 35,
-    technical_spec: 31,
-    architecture: 20,
-  },
-  by_language: {
-    zh: 89,
-    en: 39,
-  },
-};
 
 const categoryLabels: Record<string, string> = {
   employee_handbook: '员工手册',
@@ -53,26 +39,37 @@ const langLabels: Record<string, string> = {
   en: 'English',
 };
 
-const configItems = [
-  { icon: <RobotOutlined />, label: 'LLM', value: 'OpenAI-compatible (deepseek-v4-flash)' },
-  { icon: <ExperimentOutlined />, label: 'Embedding', value: 'Ollama (qwen3-embedding:0.6b, 1536d)' },
-  { icon: <DatabaseOutlined />, label: 'VectorStore', value: 'pgvector (PostgreSQL + HNSW)' },
-  { icon: <ThunderboltOutlined />, label: 'Reranker', value: 'Ollama (Qwen3-Reranker-0.6B) [已启用]' },
-  { icon: <ApartmentOutlined />, label: 'Sparse Backend', value: 'pg_bm25' },
-];
+const overviewConfigItems = (config: SystemConfig | null) => config ? [
+  { icon: <RobotOutlined />, label: 'LLM', value: `${config.llm.provider} (${config.llm.model})` },
+  { icon: <ExperimentOutlined />, label: 'Embedding', value: `${config.embedding.provider} (${config.embedding.model})` },
+  { icon: <DatabaseOutlined />, label: 'VectorStore', value: `${config.vector_store.backend} (${config.vector_store.host}:${config.vector_store.port})` },
+  { icon: <ThunderboltOutlined />, label: 'Reranker', value: `${config.rerank.provider} (${config.rerank.model}) [${config.rerank.enabled ? '已启用' : '已禁用'}]` },
+  { icon: <ApartmentOutlined />, label: 'Sparse Backend', value: config.retrieval.sparse_backend },
+] : [];
 
 export default function Overview() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [config, setConfig] = useState<SystemConfig | null>(null);
 
   useEffect(() => {
-    // 模拟 API 调用
-    const timer = setTimeout(() => {
-      setStats(MOCK_STATS);
-      setLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
+    let cancelled = false;
+    Promise.all([getStats(), getConfig()])
+      .then(([s, c]) => {
+        if (!cancelled) {
+          setStats(s);
+          setConfig(c);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err.message || '加载失败');
+          setLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
   }, []);
 
   if (loading) {
@@ -100,6 +97,7 @@ export default function Overview() {
     count: value,
   }));
 
+  const configItems = overviewConfigItems(config);
   return (
     <div>
       <h2 style={{ marginBottom: 24 }}>系统总览</h2>

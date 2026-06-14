@@ -1,29 +1,11 @@
 import { InboxOutlined, PlayCircleOutlined, ReloadOutlined, CheckCircleFilled, CloseCircleFilled, LoadingOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, message, Modal, Progress, Select, Space, Spin, Table, Tag, Upload } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { ColumnsType } from 'antd/es/table';
+import { getIngestionTraces, uploadFile } from '../api/ingestion';
 import type { IngestionTrace } from '../types';
 import type { UploadProps } from 'antd';
 const { Dragger } = Upload;
-// ── Mock 数据 ─────────────────────────────────────────────
-const mockHistory: IngestionTrace[] = Array.from({ length: 25 }, (_, i) => ({
-  trace_id: `trace-ingest-${String(i + 1).padStart(4, '0')}`,
-  source_path: `/data/docs/${['employee_handbook', 'compliance', 'technical_spec', 'architecture'][i % 4]}/doc_${i + 1}.${['pdf', 'md', 'html'][i % 3]}`,
-  collection: 'default',
-  total_latency_ms: Math.floor(Math.random() * 8000) + 500,
-  status: (['success', 'success', 'success', 'failed', 'processing'] as const)[i % 5],
-  total_chunks: Math.floor(Math.random() * 50) + 3,
-  total_images: 0,
-  stages: {
-    load: { duration_ms: Math.floor(Math.random() * 500) + 50 },
-    split: { duration_ms: Math.floor(Math.random() * 800) + 100 },
-    encode: { duration_ms: Math.floor(Math.random() * 2000) + 300 },
-    index: { duration_ms: Math.floor(Math.random() * 1000) + 200 },
-  },
-  error: i % 5 === 3 ? 'PDF 解析失败: 文件格式不支持' : undefined,
-  created_at: new Date(Date.now() - i * 3600 * 1000).toISOString(),
-}));
-
 const statusConfig: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
   success: { color: 'green', icon: <CheckCircleFilled />, label: '成功' },
   failed: { color: 'red', icon: <CloseCircleFilled />, label: '失败' },
@@ -34,21 +16,34 @@ export default function IngestionManager() {
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState<IngestionTrace[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('employee_handbook');
   const [selectedLanguage, setSelectedLanguage] = useState('zh');
   const [fileList, setFileList] = useState<File[]>([]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setHistory(mockHistory);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getIngestionTraces({ page, page_size: pageSize });
+      setHistory(result.items);
+      setTotal(result.total);
+    } catch (err: any) {
+      console.error('Failed to load ingestion history:', err);
+    } finally {
       setLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
+    }
+  }, [page, pageSize]);
 
-  const handleRunIngestion = (trace: IngestionTrace) => {
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleRunIngestion = async (trace: IngestionTrace) => {
     message.info(`重新摄取: ${trace.source_path}`);
+    // TODO: 触发 Ingestion Pipeline 重新处理
   };
 
   const handleUpload = async () => {
@@ -57,23 +52,17 @@ export default function IngestionManager() {
       return;
     }
     setUploading(true);
-    // 模拟上传 + 摄取
-    await new Promise((r) => setTimeout(r, 2000));
-    const newTrace: IngestionTrace = {
-      trace_id: `trace-ingest-${String(Date.now())}`,
-      source_path: fileList[0].name,
-      collection: 'default',
-      total_latency_ms: 0,
-      status: 'processing',
-      total_chunks: 0,
-      total_images: 0,
-      created_at: new Date().toISOString(),
-    };
-    setHistory((prev) => [newTrace, ...prev]);
-    setUploading(false);
-    setUploadModalOpen(false);
-    setFileList([]);
-    message.success('文件已提交摄取');
+    try {
+      await uploadFile(fileList[0]);
+      message.success('文件已提交摄取');
+      setUploadModalOpen(false);
+      setFileList([]);
+      fetchData();
+    } catch (err: any) {
+      message.error('上传失败: ' + (err.message || '未知错误'));
+    } finally {
+      setUploading(false);
+    }
   };
 
   const columns: ColumnsType<IngestionTrace> = [
@@ -140,7 +129,7 @@ export default function IngestionManager() {
       <Card
         title={`摄取记录 (${history.length})`}
         extra={
-          <Button icon={<ReloadOutlined />} onClick={() => { setLoading(true); setTimeout(() => setLoading(false), 300); }}>
+          <Button icon={<ReloadOutlined />} onClick={fetchData}>
             刷新
           </Button>
         }
@@ -150,7 +139,7 @@ export default function IngestionManager() {
           dataSource={history}
           rowKey="trace_id"
           loading={loading}
-          pagination={{ pageSize: 20, showSizeChanger: true }}
+          pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'], onChange: (p, ps) => { setPage(p); setPageSize(ps); } }}
           locale={{ emptyText: '暂无摄取记录' }}
           size="middle"
           expandable={{

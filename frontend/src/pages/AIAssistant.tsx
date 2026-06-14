@@ -1,76 +1,74 @@
-import { useState, useRef } from 'react';
+/* ============================================================================
+ * Knowledge Service — AIAssistant AI 知识助手页面 (G10)
+ * ============================================================================ */
+
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  Card, Input, Button, List, Tag, Space, Segmented, Switch, Typography, Spin, Empty,
-  Popconfirm, message, Divider, Tooltip, Flex
+  Card, Input, Button, List, Space, Segmented, Switch, Typography, Spin, Empty,
+  Popconfirm, message, Flex, Tag,
 } from 'antd';
 import {
   SendOutlined, RobotOutlined, UserOutlined, DeleteOutlined,
   SettingOutlined, LinkOutlined, HistoryOutlined,
-  ReloadOutlined, PlusOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import type { Conversation, Message, SearchMode } from '../types';
+import { askAssistant, getConversationHistory, deleteConversation, getConversationDetail } from '../api/assistant';
 
 const { Text, Paragraph } = Typography;
 
-const mockConversations: Conversation[] = Array.from({ length: 8 }, (_, i) => ({
-  id: `conv-${String(i + 1).padStart(4, '0')}`,
-  title: [
-    '公司年假政策咨询',
-    '技术架构讨论',
-    '合规相关问答',
-    '员工手册解读',
-    '报销流程咨询',
-    '绩效考核标准',
-    'What is our deployment process?',
-    'Onboarding checklist discussion',
-  ][i],
-  model: 'deepseek-v4-flash',
-  collection: 'default',
-  message_count: Math.floor(Math.random() * 12) + 1,
-  created_at: new Date(Date.now() - i * 86400 * 1000 * 2).toISOString(),
-  updated_at: new Date(Date.now() - i * 3600 * 1000).toISOString(),
-}));
-
-const mockMessages: Message[] = [
-  {
-    role: 'user',
-    content: '公司的年假政策是什么？我入职满一年了，想知道可以休几天。',
-    timestamp: new Date(Date.now() - 120000).toISOString(),
-  },
-  {
-    role: 'assistant',
-    content: '根据公司《员工手册》第四章第三节的规定：\n\n**年假政策概述**\n\n1. **入职满 1 年**：可享受 **10 个工作日** 年假\n2. **入职满 3 年**：可享受 **12 个工作日** 年假\n3. **入职满 5 年**：可享受 **15 个工作日** 年假\n\n> 备注：年假需在当年内休完，不可跨年累积。',
-    timestamp: new Date(Date.now() - 90000).toISOString(),
-    citations: [
-      { document_id: 'doc-001', document_name: '员工手册_2024.pdf', chunk_id: 'chunk-001', score: 0.92, text: '第四章 员工福利...' },
-      { document_id: 'doc-001', document_name: '员工手册_2024.pdf', chunk_id: 'chunk-002', score: 0.88, text: '年假管理细则...' },
-    ],
-  },
-  {
-    role: 'user',
-    content: '那如果我有紧急情况需要请假，流程是怎样的？',
-    timestamp: new Date(Date.now() - 60000).toISOString(),
-  },
-  {
-    role: 'assistant',
-    content: '紧急请假流程如下：\n\n1. **第一时间**通过企业微信联系直属上级\n2. 事后 **24 小时内**在 HR 系统补交请假申请\n3. 提供相关证明材料（病假需医院证明）\n\n> 若连续请假超过 3 天，需同时抄送部门负责人。',
-    timestamp: new Date(Date.now() - 30000).toISOString(),
-    citations: [
-      { document_id: 'doc-002', document_name: '员工手册_考勤制度.pdf', chunk_id: 'chunk-015', score: 0.95, text: '紧急请假流程...' },
-    ],
-  },
-];
-
 export default function AIAssistant() {
-  const [conversations] = useState<Conversation[]>(mockConversations);
-  const [activeConv, setActiveConv] = useState<string>(conversations[0]?.id ?? '');
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConv, setActiveConv] = useState<string>('');
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
+  const [convLoading, setConvLoading] = useState(true);
   const [searchMode, setSearchMode] = useState<SearchMode>('hybrid');
   const [rerankEnabled, setRerankEnabled] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [initialLoad, setInitialLoad] = useState(true);
+
+  // 加载对话列表
+  const fetchConversations = useCallback(async () => {
+    setConvLoading(true);
+    try {
+      const result = await getConversationHistory({ page: 1, page_size: 50 });
+      setConversations(result.items);
+      if (result.items.length > 0 && !activeConv) {
+        setActiveConv(result.items[0].id);
+      }
+    } catch (err: any) {
+      console.error('Failed to load conversations:', err);
+    } finally {
+      setConvLoading(false);
+      setInitialLoad(false);
+    }
+  }, []);
+
+  // 加载指定对话的详情
+  const fetchConversationDetail = useCallback(async (sessionId: string) => {
+    try {
+      const detail = await getConversationDetail(sessionId);
+      if (detail && detail.messages) {
+        setMessages(detail.messages);
+      }
+    } catch (err: any) {
+      console.error('Failed to load conversation detail:', err);
+      setMessages([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
+
+  // 切换对话时加载详情
+  useEffect(() => {
+    if (activeConv) {
+      fetchConversationDetail(activeConv);
+    }
+  }, [activeConv, fetchConversationDetail]);
 
   const handleSend = async () => {
     if (!inputValue.trim()) return;
@@ -80,26 +78,60 @@ export default function AIAssistant() {
       timestamp: new Date().toISOString(),
     };
     setMessages(prev => [...prev, userMsg]);
+    const queryText = inputValue.trim();
     setInputValue('');
     setLoading(true);
-    // Simulate AI response
-    const mockResp: Message = {
-      role: 'assistant',
-      content: '这是一个模拟回复。后端对接后将返回真实的检索增强生成结果。',
-      timestamp: new Date().toISOString(),
-      citations: [
-        { document_id: 'doc-demo', document_name: '示例文档.pdf', chunk_id: 'chunk-demo', score: 0.85, text: '模拟引用内容...' },
-      ],
-    };
-    setTimeout(() => {
-      setMessages(prev => [...prev, mockResp]);
+
+    try {
+      const result = await askAssistant({
+        query: queryText,
+        search_mode: searchMode,
+        rerank: rerankEnabled,
+      });
+
+      const assistantMsg: Message = {
+        role: 'assistant',
+        content: result.answer || '暂无回答',
+        timestamp: new Date().toISOString(),
+        citations: result.citations?.length > 0
+          ? result.citations.map(c => ({
+              chunk_id: c.chunk_id,
+              text: c.text,
+              source: typeof c.source === 'string' ? c.source : String(c.source || ''),
+            }))
+          : undefined,
+      };
+      setMessages(prev => [...prev, assistantMsg]);
+    } catch (err: any) {
+      message.error('请求失败: ' + (err.message || '未知错误'));
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '抱歉，回答生成失败，请稍后重试。',
+        timestamp: new Date().toISOString(),
+      }]);
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   const handleNewChat = () => {
     setMessages([]);
     setActiveConv('');
+  };
+
+  const handleDeleteConv = async (convId: string) => {
+    try {
+      await deleteConversation(convId);
+      message.success('对话已删除');
+      setConversations(prev => prev.filter(c => c.id !== convId));
+      if (activeConv === convId) {
+        const remaining = conversations.filter(c => c.id !== convId);
+        setActiveConv(remaining.length > 0 ? remaining[0].id : '');
+        setMessages([]);
+      }
+    } catch (err: any) {
+      message.error('删除失败: ' + (err.message || '未知错误'));
+    }
   };
 
   return (
@@ -113,14 +145,16 @@ export default function AIAssistant() {
           </Space>
         }
         extra={
-          <Tooltip title="新建对话">
-            <Button type="text" icon={<PlusOutlined />} onClick={handleNewChat} />
-          </Tooltip>
+          <Button type="text" icon={<PlusOutlined />} onClick={handleNewChat} />
         }
         style={{ width: 280, flexShrink: 0 }}
         styles={{ body: { padding: 8, overflow: 'auto', flex: 1 } }}
       >
-        {conversations.length === 0 ? (
+        {initialLoad ? (
+          <div style={{ textAlign: 'center', padding: 20 }}>
+            <Spin size="small" />
+          </div>
+        ) : conversations.length === 0 ? (
           <Empty description="暂无对话" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
           <List
@@ -139,7 +173,7 @@ export default function AIAssistant() {
                   <Popconfirm
                     key="delete"
                     title="确认删除此对话？"
-                    onConfirm={() => message.success('已删除')}
+                    onConfirm={() => handleDeleteConv(conv.id)}
                   >
                     <Button type="text" size="small" danger icon={<DeleteOutlined />} />
                   </Popconfirm>,
@@ -192,7 +226,7 @@ export default function AIAssistant() {
           style={{ flex: 1, overflow: 'auto', marginBottom: 12 }}
           styles={{ body: { padding: 16 } }}
         >
-          {messages.length === 0 ? (
+          {messages.length === 0 && !loading ? (
             <Empty description="开始新的对话吧！" style={{ marginTop: 80 }} />
           ) : (
             <Flex vertical gap={16}>
@@ -234,7 +268,7 @@ export default function AIAssistant() {
                                 color="purple"
                                 bordered={false}
                               >
-                                {cit.document_name} ({(cit.score * 100).toFixed(0)}%)
+                                {typeof cit.source === 'string' ? cit.source : '来源'}
                               </Tag>
                             ))}
                           </Flex>

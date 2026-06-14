@@ -1,73 +1,46 @@
+/* ============================================================================
+ * Knowledge Service — QueryTraces 查询追踪页面 (G9)
+ * ============================================================================ */
+
 import { ReloadOutlined, ThunderboltOutlined, ClockCircleOutlined, DatabaseOutlined, StopOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Col, Descriptions, Empty, Row, Space, Spin, Statistic, Table, Tag } from 'antd';
-import { useEffect, useState } from 'react';
+import { Button, Card, Col, Descriptions, Empty, Row, Space, Spin, Statistic, Table, Tag } from 'antd';
+import { useEffect, useState, useCallback } from 'react';
 import HistoryChart from '../components/HistoryChart';
 import type { ColumnsType } from 'antd/es/table';
 import type { QueryTrace, QueryMetrics } from '../types';
-// ── Mock 数据 ─────────────────────────────────────────────
-const mockMetrics: QueryMetrics = {
-  p50_latency: 2340,
-  p95_latency: 8120,
-  total_requests: 1567,
-  input_tokens: 4_567_890,
-  output_tokens: 1_234_567,
-  cache_hit_rate: 0.68,
-  rejection_rate: 0.035,
-  avg_compliance_score: 0.94,
-  period: '24h',
-};
-
-const mockTraces: QueryTrace[] = Array.from({ length: 40 }, (_, i) => ({
-  trace_id: `trace-query-${String(i + 1).padStart(4, '0')}`,
-  user_query: [
-    '公司年假政策是什么？',
-    '如何提交报销申请？',
-    'What is the technical architecture?',
-    '数据加密标准有哪些要求？',
-    'Code review guidelines for Node.js services',
-    '合规培训的截止日期是什么时候？',
-    'Explain the microservices deployment process',
-    '加班费怎么计算？',
-    '系统可用性 SLA 是多少？',
-    'Employee onboarding checklist',
-  ][i % 10],
-  collection: 'default',
-  total_latency_ms: Math.floor(Math.random() * 8000) + 500,
-  input_tokens: Math.floor(Math.random() * 1500) + 200,
-  output_tokens: Math.floor(Math.random() * 500) + 50,
-  total_tokens: 0,
-  cache_hit: i % 7 === 0,
-  rejected: i % 15 === 0,
-  rejection_reason: i % 15 === 0 ? '检测到越狱提示注入攻击' : undefined,
-  compliance_score: 0.85 + Math.random() * 0.15,
-  stages: {
-    retrieval: { duration_ms: Math.floor(Math.random() * 3000) + 200 },
-    rerank: { duration_ms: Math.floor(Math.random() * 1000) + 100 },
-    generation: { duration_ms: Math.floor(Math.random() * 4000) + 500 },
-  },
-  created_at: new Date(Date.now() - i * 1800 * 1000).toISOString(),
-}));
-
-const latencyData = Array.from({ length: 24 }, (_, i) => ({
-  label: `${i}:00`,
-  p50: Math.floor(Math.random() * 3000) + 1000,
-  p95: Math.floor(Math.random() * 5000) + 3000,
-  count: Math.floor(Math.random() * 80) + 10,
-}));
+import { getQueryTraces, getQueryMetrics } from '../api/query';
 
 export default function QueryTraces() {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<QueryMetrics | null>(null);
   const [traces, setTraces] = useState<QueryTrace[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [m, t] = await Promise.all([
+        getQueryMetrics(),
+        getQueryTraces({ page, page_size: pageSize }),
+      ]);
+      setMetrics(m);
+      setTraces(t.items);
+      setTotal(t.total);
+    } catch (err: any) {
+      setError(err.message || '加载查询追踪数据失败');
+      console.error('Failed to load query traces:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setMetrics(mockMetrics);
-      setTraces(mockTraces);
-      setLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -77,19 +50,41 @@ export default function QueryTraces() {
     );
   }
 
+  if (error) {
+    return (
+      <div style={{ padding: 24 }}>
+        <Card>
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={`加载失败: ${error}`}
+          >
+            <Button type="primary" onClick={fetchData} icon={<ReloadOutlined />}>
+              重试
+            </Button>
+          </Empty>
+        </Card>
+      </div>
+    );
+  }
+
   const columns: ColumnsType<QueryTrace> = [
     { title: 'Trace ID', dataIndex: 'trace_id', key: 'trace_id', width: 180, ellipsis: true },
     { title: '查询', dataIndex: 'user_query', key: 'user_query', width: 260, ellipsis: true },
     {
-      title: '延迟', dataIndex: 'total_latency_ms', key: 'total_latency_ms', width: 100, sorter: (a, b) => a.total_latency_ms - b.total_latency_ms,
-      render: (v: number) => (
-        <span style={{
-          fontVariantNumeric: 'tabular-nums',
-          color: v > metrics!.p95_latency ? '#f5222d' : v > metrics!.p50_latency ? '#fa8c16' : '#52c41a',
-        }}>
-          {v}ms
-        </span>
-      ),
+      title: '延迟', dataIndex: 'total_latency_ms', key: 'total_latency_ms', width: 100,
+      sorter: (a, b) => a.total_latency_ms - b.total_latency_ms,
+      render: (v: number) => {
+        const p50 = metrics?.p50_latency_ms ?? 0;
+        const p95 = metrics?.p95_latency_ms ?? 0;
+        return (
+          <span style={{
+            fontVariantNumeric: 'tabular-nums',
+            color: v > p95 ? '#f5222d' : v > p50 ? '#fa8c16' : '#52c41a',
+          }}>
+            {v}ms
+          </span>
+        );
+      },
     },
     {
       title: 'Token', key: 'tokens', width: 140,
@@ -114,6 +109,17 @@ export default function QueryTraces() {
     { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
   ];
 
+  const safeMetrics = metrics || {
+    p50_latency_ms: 0,
+    p95_latency_ms: 0,
+    total_queries: 0,
+    total_input_tokens: 0,
+    total_output_tokens: 0,
+    cache_hit_rate: 0,
+    rejection_rate: 0,
+    avg_compliance_score: 0,
+  };
+
   return (
     <div>
       <h2 style={{ marginBottom: 24 }}>Query 追踪</h2>
@@ -124,7 +130,7 @@ export default function QueryTraces() {
           <Card hoverable>
             <Statistic
               title="P50 延迟"
-              value={metrics!.p50_latency}
+              value={safeMetrics.p50_latency_ms}
               suffix="ms"
               prefix={<ClockCircleOutlined style={{ color: '#7C3AED' }} />}
               valueStyle={{ color: '#4C1D95' }}
@@ -135,7 +141,7 @@ export default function QueryTraces() {
           <Card hoverable>
             <Statistic
               title="P95 延迟"
-              value={metrics!.p95_latency}
+              value={safeMetrics.p95_latency_ms}
               suffix="ms"
               prefix={<ThunderboltOutlined style={{ color: '#f5222d' }} />}
               valueStyle={{ color: '#cf1322' }}
@@ -146,7 +152,7 @@ export default function QueryTraces() {
           <Card hoverable>
             <Statistic
               title="缓存命中率"
-              value={(metrics!.cache_hit_rate * 100).toFixed(1)}
+              value={Number((safeMetrics.cache_hit_rate * 100).toFixed(1))}
               suffix="%"
               prefix={<DatabaseOutlined style={{ color: '#52c41a' }} />}
               precision={1}
@@ -158,7 +164,7 @@ export default function QueryTraces() {
           <Card hoverable>
             <Statistic
               title="拒绝率"
-              value={(metrics!.rejection_rate * 100).toFixed(1)}
+              value={Number((safeMetrics.rejection_rate * 100).toFixed(1))}
               suffix="%"
               prefix={<StopOutlined style={{ color: '#fa8c16' }} />}
               valueStyle={{ color: '#d46b08' }}
@@ -169,7 +175,7 @@ export default function QueryTraces() {
           <Card hoverable>
             <Statistic
               title="总请求"
-              value={metrics!.total_requests}
+              value={safeMetrics.total_queries}
               prefix={<CheckCircleOutlined style={{ color: '#3B82F6' }} />}
             />
           </Card>
@@ -182,7 +188,7 @@ export default function QueryTraces() {
           <Card hoverable>
             <Statistic
               title="输入 Token (24h)"
-              value={(metrics!.input_tokens / 1_000_000).toFixed(2)}
+              value={Number((safeMetrics.total_input_tokens / 1_000_000).toFixed(2))}
               suffix="M"
               valueStyle={{ fontSize: 20 }}
             />
@@ -192,7 +198,7 @@ export default function QueryTraces() {
           <Card hoverable>
             <Statistic
               title="输出 Token (24h)"
-              value={(metrics!.output_tokens / 1_000_000).toFixed(2)}
+              value={Number((safeMetrics.total_output_tokens / 1_000_000).toFixed(2))}
               suffix="M"
               valueStyle={{ fontSize: 20 }}
             />
@@ -202,7 +208,7 @@ export default function QueryTraces() {
           <Card hoverable>
             <Statistic
               title="答案符合率"
-              value={(metrics!.avg_compliance_score * 100).toFixed(1)}
+              value={Number((safeMetrics.avg_compliance_score * 100).toFixed(1))}
               suffix="%"
               valueStyle={{ color: '#7C3AED', fontSize: 20 }}
             />
@@ -213,20 +219,57 @@ export default function QueryTraces() {
       {/* 延迟趋势图 */}
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={12}>
-          <HistoryChart title="P50 / P95 延迟趋势" data={latencyData} dataKey="p50" color="#7C3AED" />
+          <HistoryChart
+            title="P50 / P95 延迟趋势"
+            data={traces.length > 0
+              ? traces.slice(0, 24).map((t, i) => ({
+                  label: `${i}h`,
+                  value: t.total_latency_ms,
+                }))
+              : [{ label: '暂无数据', value: 0 }]
+            }
+            dataKey="value"
+            color="#7C3AED"
+          />
         </Col>
         <Col xs={24} lg={12}>
-          <HistoryChart title="请求量趋势" data={latencyData} dataKey="count" color="#3B82F6" />
+          <HistoryChart
+            title="请求量趋势"
+            data={traces.length > 0
+              ? traces.slice(0, 24).map((t, i) => ({
+                  label: `${i}h`,
+                  value: 1,
+                }))
+              : [{ label: '暂无数据', value: 0 }]
+            }
+            dataKey="value"
+            color="#3B82F6"
+          />
         </Col>
       </Row>
 
       {/* 查询历史 */}
-      <Card title="查询历史" style={{ marginTop: 16 }}>
+      <Card
+        title="查询历史"
+        style={{ marginTop: 16 }}
+        extra={
+          <Button icon={<ReloadOutlined />} onClick={fetchData}>
+            刷新
+          </Button>
+        }
+      >
         <Table
           columns={columns}
           dataSource={traces}
           rowKey="trace_id"
-          pagination={{ pageSize: 20, showSizeChanger: true }}
+          loading={loading}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+          }}
           locale={{ emptyText: <Empty description="暂无查询历史" /> }}
           size="middle"
           expandable={{
@@ -234,10 +277,21 @@ export default function QueryTraces() {
               <Descriptions size="small" column={2} bordered style={{ padding: 8 }}>
                 <Descriptions.Item label="Input Tokens">{record.input_tokens}</Descriptions.Item>
                 <Descriptions.Item label="Output Tokens">{record.output_tokens}</Descriptions.Item>
-                <Descriptions.Item label="检索耗时">{record.stages?.retrieval?.duration_ms || '-'}ms</Descriptions.Item>
-                <Descriptions.Item label="重排序耗时">{record.stages?.rerank?.duration_ms || '-'}ms</Descriptions.Item>
-                <Descriptions.Item label="生成耗时">{record.stages?.generation?.duration_ms || '-'}ms</Descriptions.Item>
-                <Descriptions.Item label="符合率">{record.compliance_score ? `${(record.compliance_score * 100).toFixed(0)}%` : '-'}</Descriptions.Item>
+                <Descriptions.Item label="检索耗时">
+                  {record.stages && (record.stages as any).retrieval?.duration_ms
+                    ? `${(record.stages as any).retrieval.duration_ms}ms` : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="重排序耗时">
+                  {record.stages && (record.stages as any).rerank?.duration_ms
+                    ? `${(record.stages as any).rerank.duration_ms}ms` : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="生成耗时">
+                  {record.stages && (record.stages as any).generation?.duration_ms
+                    ? `${(record.stages as any).generation.duration_ms}ms` : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="符合率">
+                  {record.compliance_score ? `${(record.compliance_score * 100).toFixed(0)}%` : '-'}
+                </Descriptions.Item>
                 {record.rejection_reason && (
                   <Descriptions.Item label="拒绝原因" span={2}>
                     <Tag color="red">{record.rejection_reason}</Tag>

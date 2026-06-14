@@ -1,26 +1,73 @@
 """Knowledge Service — FastAPI 应用入口。"""
 
-from contextlib import asynccontextmanager
-from pathlib import Path
+from __future__ import annotations
 
-from fastapi import FastAPI
+import time
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
 
-# 导入 libs 包以触发所有工厂注册（LLM, Embedding, Splitter 等）
+# 导入 libs 包以触发所有工厂注册
 import app.libs  # noqa: F401
 
 from app.core.settings import get_settings
+from app.observability import setup_structlog, get_logger
+from app.core.trace import trace_context, generate_id, get_trace_context
+from app.api.websocket import ingestion_progress_endpoint
+
+_logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理。"""
+    # ── 初始化结构化日志 ──
+    setup_structlog()
+    _logger.info(
+        "service_startup",
+        event_type="http_request",
+        message="Knowledge Service 正在启动",
+    )
+
     settings = get_settings()
-    # TODO(B4): 初始化数据库连接池
-    # TODO(F4): request_id 中间件
+
+    # ── 初始化数据库连接池 ──
+    try:
+        from app.core.database import init_db_pools
+
+        await init_db_pools()
+    except Exception as e:
+        _logger.error(
+            "db_init_failed",
+            event_type="error",
+            error=str(e),
+            message="数据库连接池初始化失败，服务将退出",
+        )
+        # 数据库是核心依赖，初始化失败则退出
+        raise
+
     yield
-    # TODO: 清理资源
+
+    # ── 关闭数据库连接池 ──
+    try:
+        from app.core.database import close_db_pools
+
+        await close_db_pools()
+    except Exception as e:
+        _logger.warning(
+            "db_close_warning",
+            event_type="http_request",
+            message=f"关闭数据库连接时出现异常: {e}",
+        )
+
+    _logger.info(
+        "service_shutdown",
+        event_type="http_request",
+        message="Knowledge Service 正在关闭",
+    )
 
 
 def create_app() -> FastAPI:
@@ -34,27 +81,116 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS — 允许前端开发服务器访问
+    # CORS — 开发环境允许所有 localhost 端口的前端
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173"],
+        allow_origin_regex=r"http://localhost:\d+",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
+    # ── 注册 tracing + request_id 中间件 ──
+    @app.middleware("http")
+    async def tracing_middleware(request: Request, call_next):
+        trace_id = request.headers.get("X-Trace-Id", "")
+        parent_span_id = request.headers.get("X-Span-Id", "")
+        request_id = request.headers.get("X-Request-Id", generate_id())
+
+        start = time.monotonic()
+
+        with trace_context(
+            trace_id=trace_id or None,
+            parent_span_id=parent_span_id or None,
+            request_id=request_id,
+        ):
+            ctx = get_trace_context()
+
+            _logger.info(
+                "http_request",
+                event_type="http_request",
+                metadata={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "query_string": str(request.url.query),
+                    "client_host": request.client.host if request.client else "",
+                },
+            )
+
+            try:
+                response = await call_next(request)
+            except Exception as exc:
+                elapsed = time.monotonic() - start
+                _logger.error(
+                    "http_error",
+                    event_type="error",
+                    error=str(exc),
+                    metadata={
+                        "method": request.method,
+                        "path": request.url.path,
+                        "duration_ms": round(elapsed * 1000, 2),
+                    },
+                )
+                return JSONResponse(
+                    status_code=500,
+                    content={"detail": "Internal Server Error"},
+                )
+
+            elapsed = time.monotonic() - start
+
+            if ctx.get("trace_id"):
+                response.headers["X-Trace-Id"] = ctx["trace_id"]
+            if ctx.get("span_id"):
+                response.headers["X-Span-Id"] = ctx["span_id"]
+            if ctx.get("request_id"):
+                response.headers["X-Request-Id"] = ctx["request_id"]
+
+            _logger.info(
+                "http_response",
+                event_type="http_response",
+                metadata={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "duration_ms": round(elapsed * 1000, 2),
+                },
+            )
+
+        return response
+
     # ── 健康检查 ──
     @app.get("/api/health")
     async def health():
+        """Service health check."""
         return {
             "status": "ok",
             "service": "knowledge-service",
             "version": "0.1.0",
         }
 
-    # TODO(E 阶段): 挂载 REST API 路由
-    # TODO(E 阶段): 挂载 MCP SSE Transport
-    # TODO(E 阶段): 挂载 WebSocket 端点
+    # ── WebSocket 实时进度推送 ──
+    @app.websocket("/api/ws/ingestion/progress")
+    async def ws_ingestion_progress(websocket: WebSocket):
+        await ingestion_progress_endpoint(websocket)
+
+    # ── 挂载 REST API 路由 ──
+    from app.api.router import api_router
+
+    app.include_router(api_router)
+
+    # ── 挂载 MCP SSE Transport ──
+    try:
+        from app.mcp.server import create_mcp_sse_app
+
+        sse_app = create_mcp_sse_app()
+        app.mount("/mcp", sse_app)
+        _logger.info("mcp_mounted", event_type="http_request", message="MCP SSE Transport 已挂载到 /mcp")
+    except Exception as e:
+        _logger.warning(
+            "mcp_mount_warning",
+            event_type="http_request",
+            message=f"MCP SSE 挂载失败，服务仍可运行: {e}",
+        )
 
     return app
 
@@ -69,7 +205,7 @@ def main() -> None:
         "app.main:app",
         host="127.0.0.1",
         port=settings.server.port,
-        reload=settings.server.reload,
+        reload=getattr(settings.server, "reload", False),
     )
 
 

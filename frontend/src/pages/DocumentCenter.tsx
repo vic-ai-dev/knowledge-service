@@ -1,39 +1,11 @@
 import { DeleteOutlined, ReloadOutlined, UploadOutlined, SearchOutlined, FolderAddOutlined, FolderOpenOutlined, FileTextOutlined, ExclamationCircleOutlined, InboxOutlined } from '@ant-design/icons';
 import { Alert, Badge, Button, Card, Col, Empty, Input, message, Modal, Popconfirm, Row, Select, Space, Spin, Statistic, Table, Tag, Upload } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { ColumnsType } from 'antd/es/table';
+import { listDocuments, listCollections, deleteDocument, batchDeleteDocuments, createCollection, deleteCollection } from '../api/documents';
+import { uploadFile } from '../api/ingestion';
 import type { DocumentInfo, Collection } from '../types';
 import type { UploadProps } from 'antd';
-// ── Mock 数据 ─────────────────────────────────────────────
-const mockDocuments: DocumentInfo[] = Array.from({ length: 52 }, (_, i) => {
-  const categories: DocumentInfo['category'][] = ['employee_handbook', 'compliance', 'technical_spec', 'architecture'];
-  const languages: DocumentInfo['language'][] = ['zh', 'en'];
-  const types: DocumentInfo['doc_type'][] = ['pdf', 'md', 'html'];
-  const cat = categories[i % 4];
-  const lang = languages[i % 2];
-  const type = types[i % 3];
-  return {
-    id: `doc-${String(i + 1).padStart(4, '0')}`,
-    source_path: `/data/docs/${lang}/${cat}/doc_${i + 1}.${type === 'pdf' ? 'pdf' : type === 'md' ? 'md' : 'html'}`,
-    title: `文档 ${i + 1}`,
-    collection: 'default',
-    category: cat,
-    language: lang,
-    doc_type: type,
-    file_size: Math.floor(Math.random() * 10_000_000) + 50_000,
-    chunk_count: Math.floor(Math.random() * 80) + 5,
-    ingested_at: new Date(Date.now() - Math.random() * 60 * 24 * 3600 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - Math.random() * 14 * 24 * 3600 * 1000).toISOString(),
-    is_deleted: false,
-  };
-});
-
-const mockCollections: Collection[] = [
-  { id: 'col-1', name: 'default', description: '默认知识库', document_count: 52, chunk_count: 4823, created_at: '2025-01-01T00:00:00Z', updated_at: '2025-06-10T00:00:00Z' },
-  { id: 'col-2', name: 'hr_handbook', description: '人力资源手册', document_count: 15, chunk_count: 1240, created_at: '2025-02-15T00:00:00Z', updated_at: '2025-06-08T00:00:00Z' },
-  { id: 'col-3', name: 'tech_arch', description: '技术架构文档', document_count: 22, chunk_count: 2150, created_at: '2025-03-01T00:00:00Z', updated_at: '2025-06-12T00:00:00Z' },
-];
-
 const categoryLabels: Record<string, string> = {
   employee_handbook: '员工手册',
   compliance: '合规指南',
@@ -58,22 +30,37 @@ export default function DocumentCenter() {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [searchText, setSearchText] = useState('');
   const [colModalOpen, setColModalOpen] = useState(false);
   const [newColName, setNewColName] = useState('');
   const [newColDesc, setNewColDesc] = useState('');
-  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [fileList, setFileList] = useState<File[]>([]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDocuments(mockDocuments);
-      setCollections(mockCollections);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [docResult, colResult] = await Promise.all([
+        listDocuments({ page, page_size: pageSize }),
+        listCollections(),
+      ]);
+      setDocuments(docResult.items);
+      setTotal(docResult.total);
+      setCollections(colResult);
+    } catch (err: any) {
+      message.error('加载数据失败: ' + (err.message || '未知错误'));
+    } finally {
       setLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
+    }
+  }, [page, pageSize]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // ── 操作处理函数 ──────────────────────────────────────
   const handleBatchDelete = () => {
@@ -81,43 +68,57 @@ export default function DocumentCenter() {
       title: '确认批量删除',
       icon: <ExclamationCircleOutlined />,
       content: `确定要删除选中的 ${selectedRowKeys.length} 个文档吗？（处理即弃，文件将在处理完成后删除）`,
-      onOk: () => {
-        setDocuments((prev) => prev.filter((d) => !selectedRowKeys.includes(d.id)));
-        setSelectedRowKeys([]);
-        message.success(`已删除 ${selectedRowKeys.length} 个文档`);
+      onOk: async () => {
+        try {
+          await batchDeleteDocuments(selectedRowKeys);
+          message.success(`已删除 ${selectedRowKeys.length} 个文档`);
+          setSelectedRowKeys([]);
+          fetchData();
+        } catch (err: any) {
+          message.error('批量删除失败: ' + (err.message || '未知错误'));
+        }
       },
     });
   };
 
-  const handleDeleteDoc = (id: string) => {
-    setDocuments((prev) => prev.filter((d) => d.id !== id));
-    message.success('文档已删除（处理即弃）');
+  const handleDeleteDoc = async (id: string) => {
+    try {
+      await deleteDocument(id);
+      message.success('文档已删除（处理即弃）');
+      fetchData();
+    } catch (err: any) {
+      message.error('删除失败: ' + (err.message || '未知错误'));
+    }
   };
 
-  const handleCreateCollection = () => {
+  const handleCreateCollection = async () => {
     if (!newColName.trim()) {
       message.warning('请输入集合名称');
       return;
     }
-    const newCol: Collection = {
-      id: `col-${Date.now()}`,
-      name: newColName.trim(),
-      description: newColDesc.trim(),
-      document_count: 0,
-      chunk_count: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    setCollections((prev) => [...prev, newCol]);
-    setColModalOpen(false);
-    setNewColName('');
-    setNewColDesc('');
-    message.success(`集合 "${newCol.name}" 已创建`);
+    try {
+      await createCollection({ name: newColName.trim(), description: newColDesc.trim() });
+      setColModalOpen(false);
+      setNewColName('');
+      setNewColDesc('');
+      message.success(`集合已创建`);
+      // Refresh collections
+      const cols = await listCollections();
+      setCollections(cols);
+    } catch (err: any) {
+      message.error('创建集合失败: ' + (err.message || '未知错误'));
+    }
   };
 
-  const handleDeleteCollection = (name: string) => {
-    setCollections((prev) => prev.filter((c) => c.name !== name));
-    message.success(`集合 "${name}" 已删除`);
+  const handleDeleteCollection = async (name: string) => {
+    try {
+      await deleteCollection(name);
+      message.success(`集合 "${name}" 已删除`);
+      const cols = await listCollections();
+      setCollections(cols);
+    } catch (err: any) {
+      message.error('删除集合失败: ' + (err.message || '未知错误'));
+    }
   };
 
   const handleUpload = async () => {
@@ -126,11 +127,17 @@ export default function DocumentCenter() {
       return;
     }
     setUploading(true);
-    await new Promise((r) => setTimeout(r, 2000));
-    message.success('文件已上传并开始处理（处理即弃）');
-    setUploadModalOpen(false);
-    setFileList([]);
-    setUploading(false);
+    try {
+      await uploadFile(fileList[0]);
+      message.success('文件已上传并开始处理（处理即弃）');
+      setUploadModalOpen(false);
+      setFileList([]);
+      fetchData();
+    } catch (err: any) {
+      message.error('上传失败: ' + (err.message || '未知错误'));
+    } finally {
+      setUploading(false);
+    }
   };
 
   // ── 筛选与表格 ──────────────────────────────────────
@@ -225,7 +232,7 @@ export default function DocumentCenter() {
             </Space>
           </Col>
           <Col>
-            <Button icon={<ReloadOutlined />} onClick={() => { setLoading(true); setTimeout(() => setLoading(false), 300); }}>
+            <Button icon={<ReloadOutlined />} onClick={fetchData}>
               刷新
             </Button>
           </Col>
@@ -274,7 +281,7 @@ export default function DocumentCenter() {
           dataSource={filtered}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'] }}
+          pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'], onChange: (p, ps) => { setPage(p); setPageSize(ps); } }}
           locale={{ emptyText: <Empty description="暂无文档数据" /> }}
           size="middle"
         />

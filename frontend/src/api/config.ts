@@ -3,13 +3,12 @@
  * ============================================================================ */
 
 import apiClient from './client';
-import type { HealthResponse, SystemConfig, SystemStats } from '../types';
+import type { SystemConfig, SystemStats } from '../types';
 
-export const getHealth = () =>
-  apiClient.get<HealthResponse>('/health').then((r) => r.data);
-
+/** 获取系统配置 */
 export const getConfig = () =>
-  apiClient.get<SystemConfig>('/config').then((r) => r.data);
+  apiClient.get<SystemConfig>('/system/config').then((r) => r.data);
 
+/** 获取系统统计信息 */
 export const getStats = () =>
-  apiClient.get<SystemStats>('/stats').then((r) => r.data);
+  apiClient.get<SystemStats>('/system/stats').then((r) => r.data);

@@ -1,6 +1,6 @@
 """LLM 实现包 -- 导入即触发工厂注册。"""
 
-from app.libs.llm.openai import OpenAILLM
+from app.libs.llm.openai import OpenAILLM, LLMError
 from app.libs.llm.ollama import OllamaLLM
 from app.libs.llm.deepseek import DeepSeekLLM
 from app.libs.factory import LLMFactory
@@ -17,4 +17,4 @@ LLMFactory.register("deepseek", DeepSeekLLM)
 # Ollama 本地后端
 LLMFactory.register("ollama", OllamaLLM)
 
-__all__ = ["OpenAILLM", "OllamaLLM", "DeepSeekLLM"]
+__all__ = ["OpenAILLM", "OllamaLLM", "DeepSeekLLM", "LLMError"]

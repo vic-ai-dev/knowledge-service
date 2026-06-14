@@ -2,58 +2,12 @@
  * Knowledge Service — DataBrowser 数据浏览器页面 (G1)
  * ============================================================================ */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Tag, Select, Space, Input, Spin, Alert, Modal, Descriptions, Button } from 'antd';
 import { SearchOutlined, EyeOutlined } from '@ant-design/icons';
+import { listDocuments, getDocumentChunks } from '../api/documents';
 import type { DocumentInfo, ChunkRecord } from '../types';
 import type { ColumnsType } from 'antd/es/table';
-
-// ── Mock 数据 ─────────────────────────────────────────────
-const generateMockDocs = (): DocumentInfo[] => {
-  const docs: DocumentInfo[] = [];
-  const categories: DocumentInfo['category'][] = ['employee_handbook', 'compliance', 'technical_spec', 'architecture'];
-  const languages: DocumentInfo['language'][] = ['zh', 'en'];
-  const docTypes: DocumentInfo['doc_type'][] = ['pdf', 'md', 'html'];
-
-  for (let i = 1; i <= 45; i++) {
-    const cat = categories[i % 4];
-    const lang = languages[i % 2];
-    const type = docTypes[i % 3];
-    const chunkCount = Math.floor(Math.random() * 80) + 5;
-    docs.push({
-      id: `doc-${String(i).padStart(4, '0')}`,
-      source_path: `/data/docs/${lang}/${cat}/${type}/doc_${i}.${type === 'pdf' ? 'pdf' : type === 'md' ? 'md' : 'html'}`,
-      title: `文档 ${i}`,
-      collection: 'default',
-      category: cat,
-      language: lang,
-      doc_type: type,
-      file_size: Math.floor(Math.random() * 5_000_000) + 50_000,
-      chunk_count: chunkCount,
-      ingested_at: new Date(Date.now() - Math.random() * 30 * 24 * 3600 * 1000).toISOString(),
-      updated_at: new Date(Date.now() - Math.random() * 7 * 24 * 3600 * 1000).toISOString(),
-      is_deleted: false,
-    });
-  }
-  return docs;
-};
-
-const mockChunks = (docId: string): ChunkRecord[] => {
-  const chunks: ChunkRecord[] = [];
-  for (let i = 0; i < 8; i++) {
-    chunks.push({
-      id: `${docId}-chunk-${i}`,
-      doc_id: docId,
-      chunk_index: i,
-      text: `这是文档 ${docId} 的第 ${i + 1} 个 Chunk 的文本内容示例。在实际系统中，此处会显示从文档中提取的文本片段，包含完整的语义信息。`,
-      metadata: { source: 'test', page: Math.floor(i / 2) + 1 },
-      source_path: `/data/docs/doc_${docId}.pdf`,
-      token_count: Math.floor(Math.random() * 300) + 50,
-      created_at: new Date().toISOString(),
-    });
-  }
-  return chunks;
-};
 
 // ── 常量 ──────────────────────────────────────────────────
 const categoryOptions = [
@@ -100,18 +54,36 @@ export default function DataBrowser() {
   const [language, setLanguage] = useState<string | undefined>();
   const [docType, setDocType] = useState<string | undefined>();
   const [searchText, setSearchText] = useState('');
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [chunkModalOpen, setChunkModalOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<DocumentInfo | null>(null);
   const [chunks, setChunks] = useState<ChunkRecord[]>([]);
   const [chunksLoading, setChunksLoading] = useState(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setData(generateMockDocs());
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await listDocuments({
+        category,
+        language,
+        doc_type: docType,
+        page,
+        page_size: pageSize,
+      });
+      setData(result.items);
+      setTotal(result.total);
+    } catch (err: any) {
+      console.error('Failed to load documents:', err);
+    } finally {
       setLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
+    }
+  }, [category, language, docType, page, pageSize]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const filtered = data.filter((doc) => {
     if (category && doc.category !== category) return false;
@@ -121,14 +93,19 @@ export default function DataBrowser() {
     return true;
   });
 
-  const openChunkModal = (doc: DocumentInfo) => {
+  const openChunkModal = async (doc: DocumentInfo) => {
     setSelectedDoc(doc);
     setChunkModalOpen(true);
     setChunksLoading(true);
-    setTimeout(() => {
-      setChunks(mockChunks(doc.id));
+    try {
+      const result = await getDocumentChunks(doc.id, { page: 1, page_size: 50 });
+      setChunks(result.items);
+    } catch (err) {
+      console.error('Failed to load chunks:', err);
+      setChunks([]);
+    } finally {
       setChunksLoading(false);
-    }, 400);
+    }
   };
 
   const columns: ColumnsType<DocumentInfo> = [
@@ -175,7 +152,7 @@ export default function DataBrowser() {
             allowClear
             style={{ width: 160 }}
             value={category}
-            onChange={setCategory}
+            onChange={(v) => { setCategory(v); setPage(1); }}
             options={categoryOptions}
           />
           <Select
@@ -183,7 +160,7 @@ export default function DataBrowser() {
             allowClear
             style={{ width: 120 }}
             value={language}
-            onChange={setLanguage}
+            onChange={(v) => { setLanguage(v); setPage(1); }}
             options={langOptions}
           />
           <Select
@@ -191,7 +168,7 @@ export default function DataBrowser() {
             allowClear
             style={{ width: 120 }}
             value={docType}
-            onChange={setDocType}
+            onChange={(v) => { setDocType(v); setPage(1); }}
             options={docTypeOptions}
           />
           <Input
@@ -212,7 +189,7 @@ export default function DataBrowser() {
           dataSource={filtered}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'] }}
+          pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'], onChange: (p, ps) => { setPage(p); setPageSize(ps); } }}
           locale={{ emptyText: '暂无文档数据' }}
           size="middle"
         />

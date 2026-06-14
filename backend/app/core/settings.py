@@ -22,6 +22,8 @@ class DatabaseConfig(BaseModel):
     password: str = "root123456"
     database: str = "knowledge"
     max_connections: int = 10
+    pool_min_size: int = 2
+    pool_max_size: int = 10
 
     @field_validator("port")
     @classmethod
@@ -47,6 +49,8 @@ class VectorStoreConfig(BaseModel):
     database: str = "knowledge_rag"
     table_name: str = "document_chunks"
     embedding_dimensions: int = 1536
+    pool_min_size: int = 2
+    pool_max_size: int = 10
 
     @field_validator("port")
     @classmethod
@@ -72,6 +76,7 @@ class LLMConfig(BaseModel):
     base_url: str | None = None
     temperature: float = 0.0
     max_tokens: int = 4096
+    timeout: int = 60  # HTTP 请求超时（秒）
 
     @field_validator("temperature")
     @classmethod

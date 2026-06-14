@@ -31,9 +31,3 @@ class BaseEmbedding(ABC):
     def dimensions(self) -> int:
         """返回向量维度。"""
         ...
-
-    @property
-    @abstractmethod
-    def batch_size(self) -> int:
-        """建议批处理大小。"""
-        ...

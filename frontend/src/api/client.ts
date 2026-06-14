@@ -3,6 +3,7 @@
  * ============================================================================ */
 
 import axios from 'axios';
+import type { PaginatedResponse } from '../types';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
@@ -19,5 +20,14 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+// ── Pagination unwrap helper ────────────────────────────────
+// Backend paginated endpoints return { items, total, page, page_size }
+export async function unwrapPaginated<T>(
+  promise: Promise<{ data: PaginatedResponse<T> }>,
+): Promise<{ items: T[]; total: number; page: number; page_size: number }> {
+  const r = await promise;
+  return r.data;
+}
 
 export default apiClient;

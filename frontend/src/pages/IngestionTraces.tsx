@@ -2,42 +2,14 @@
  * Knowledge Service — IngestionTraces Ingestion 追踪页面 (G2)
  * ============================================================================ */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, Table, Tag, Space, Spin, Alert, Button, Empty } from 'antd';
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { IngestionTrace } from '../types';
 import type { ColumnsType } from 'antd/es/table';
+import { getIngestionTraces, getIngestionTraceDetail } from '../api/ingestion';
 import WaterfallChart from '../components/WaterfallChart';
 import type { Stage } from '../components/WaterfallChart';
-
-// ── Mock 数据 ─────────────────────────────────────────────
-const mockTraces: IngestionTrace[] = Array.from({ length: 30 }, (_, i) => {
-  const loadMs = Math.floor(Math.random() * 800) + 100;
-  const splitMs = Math.floor(Math.random() * 600) + 100;
-  const encodeMs = Math.floor(Math.random() * 2000) + 200;
-  const indexMs = Math.floor(Math.random() * 1000) + 100;
-  const bm25Ms = Math.floor(Math.random() * 500) + 100;
-  const totalMs = loadMs + splitMs + encodeMs + indexMs + bm25Ms;
-
-  return {
-    trace_id: `trace-ingest-${String(i + 1).padStart(4, '0')}`,
-    source_path: `/data/docs/${['employee_handbook', 'compliance', 'technical_spec', 'architecture'][i % 4]}/doc_${i + 1}.${['pdf', 'md', 'html'][i % 3]}`,
-    collection: 'default',
-    total_latency_ms: totalMs,
-    status: (['success', 'success', 'success', 'failed'] as const)[i % 4],
-    total_chunks: Math.floor(Math.random() * 60) + 5,
-    total_images: 0,
-    stages: {
-      load: { duration_ms: loadMs, start_ms: 0 },
-      split: { duration_ms: splitMs, start_ms: loadMs },
-      encode: { duration_ms: encodeMs, start_ms: loadMs + splitMs },
-      index: { duration_ms: indexMs, start_ms: loadMs + splitMs + encodeMs },
-      bm25: { duration_ms: bm25Ms, start_ms: loadMs + splitMs + encodeMs + indexMs },
-    },
-    error: i % 4 === 3 ? 'BM25 索引构建超时' : undefined,
-    created_at: new Date(Date.now() - i * 7200 * 1000).toISOString(),
-  };
-});
 
 const statusConfig: Record<string, { color: string; label: string }> = {
   success: { color: 'green', label: '成功' },
@@ -48,15 +20,44 @@ const statusConfig: Record<string, { color: string; label: string }> = {
 export default function IngestionTraces() {
   const [loading, setLoading] = useState(true);
   const [traces, setTraces] = useState<IngestionTrace[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [error, setError] = useState<string | null>(null);
   const [selectedTrace, setSelectedTrace] = useState<IngestionTrace | null>(null);
+  const [traceLoading, setTraceLoading] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await getIngestionTraces({ page, page_size: pageSize });
+      setTraces(result.items);
+      setTotal(result.total);
+    } catch (err: any) {
+      setError(err.message || '加载摄取追踪失败');
+      console.error('Failed to load ingestion traces:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setTraces(mockTraces);
-      setLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
+    fetchData();
+  }, [fetchData]);
+
+  const handleViewDetail = async (trace: IngestionTrace) => {
+    setSelectedTrace(trace);
+    setTraceLoading(true);
+    try {
+      const detail = await getIngestionTraceDetail(trace.trace_id);
+      setSelectedTrace(detail);
+    } catch (err) {
+      console.error('Failed to load trace detail:', err);
+    } finally {
+      setTraceLoading(false);
+    }
+  };
 
   const waterfallStages = (trace: IngestionTrace): Stage[] => {
     const s = trace.stages as Record<string, { duration_ms: number; start_ms?: number }> | undefined;
@@ -89,12 +90,16 @@ export default function IngestionTraces() {
     {
       title: '操作', key: 'actions', width: 80,
       render: (_: unknown, record: IngestionTrace) => (
-        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setSelectedTrace(record)}>
+        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
           瀑布图
         </Button>
       ),
     },
   ];
+
+  if (error) {
+    return <Alert type="error" message="加载失败" description={error} showIcon />;
+  }
 
   return (
     <div>
@@ -113,21 +118,23 @@ export default function IngestionTraces() {
             </Space>
             <Button size="small" onClick={() => setSelectedTrace(null)}>关闭</Button>
           </div>
-          <WaterfallChart
-            title="阶段时序瀑布图"
-            stages={waterfallStages(selectedTrace)}
-            totalDuration={selectedTrace.total_latency_ms}
-          />
+          {traceLoading ? (
+            <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+          ) : (
+            <WaterfallChart
+              title="阶段时序瀑布图"
+              stages={waterfallStages(selectedTrace)}
+              totalDuration={selectedTrace.total_latency_ms}
+            />
+          )}
         </Card>
       )}
 
       {/* 摄取历史列表 */}
       <Card
-        title={`摄取历史 (${traces.length})`}
+        title={`摄取历史 (${total})`}
         extra={
-          <Button icon={<ReloadOutlined />} onClick={() => { setLoading(true); setTimeout(() => setLoading(false), 300); }}>
-            刷新
-          </Button>
+          <Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
         }
       >
         <Table
@@ -135,7 +142,14 @@ export default function IngestionTraces() {
           dataSource={traces}
           rowKey="trace_id"
           loading={loading}
-          pagination={{ pageSize: 20, showSizeChanger: true }}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50'],
+            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+          }}
           locale={{ emptyText: <Empty description="暂无摄取历史" /> }}
           size="middle"
         />

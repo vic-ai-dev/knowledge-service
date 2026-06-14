@@ -57,11 +57,11 @@ export interface UploadResult {
 }
 
 export interface IngestionRunResult {
-  run_id: string;
-  status: IngestionStatus;
-  total_chunks?: number;
-  total_images?: number;
-  error?: string;
+  task_id: string;
+  status: string
+  filename?: string;
+  size?: number;
+  message?: string;
 }
 
 export interface IngestionTrace {
@@ -123,15 +123,14 @@ export interface QueryTrace {
 }
 
 export interface QueryMetrics {
-  p50_latency: number;
-  p95_latency: number;
-  total_requests: number;
-  input_tokens: number;
-  output_tokens: number;
+  p50_latency_ms: number;
+  p95_latency_ms: number;
+  total_queries: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
   cache_hit_rate: number;
   rejection_rate: number;
   avg_compliance_score: number;
-  period: string;
 }
 
 // ── 评估 ──────────────────────────────────────────────────
@@ -188,15 +187,49 @@ export interface HealthResponse {
 }
 
 export interface SystemConfig {
+  server: { port: number; max_file_size: number; allowed_extensions: string[] };
+  database: { host: string; port: number; database: string };
+  vector_store: { backend: string; host: string; port: number; database: string };
   llm: { provider: string; model: string };
   embedding: { provider: string; model: string };
-  retrieval: { sparse_backend: string; rerank_backend: string };
+  rerank: { provider: string; model: string; enabled: boolean };
+  retrieval: { sparse_backend: string; fusion_algorithm: string };
 }
 
 export interface SystemStats {
   total_documents: number;
   total_chunks: number;
   total_collections: number;
+  total_categories: number;
+  total_size_bytes: number;
   by_category: Record<string, number>;
   by_language: Record<string, number>;
+}
+
+
+// ── Paginated API response wrapper ──────────────────────────
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// ── Collection wrapper ──────────────────────────────────────
+export interface CollectionsResponse {
+  collections: Collection[];
+}
+
+// ── Category & Language types ──────────────────────────────
+export interface CategoryItem {
+  id: string;
+  name: string;
+}
+
+export interface CategoriesResponse {
+  categories: CategoryItem[];
+}
+
+export interface LanguagesResponse {
+  languages: CategoryItem[];
 }

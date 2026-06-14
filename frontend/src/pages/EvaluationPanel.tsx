@@ -1,29 +1,14 @@
+/* ============================================================================
+ * Knowledge Service — EvaluationPanel 评估面板页面 (G11)
+ * ============================================================================ */
+
 import { PlayCircleOutlined, ReloadOutlined, ExperimentOutlined, CheckCircleFilled, CloseCircleFilled, BarChartOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Col, Empty, message, Modal, Progress, Row, Space, Spin, Statistic, Table, Tag } from 'antd';
-import { useEffect, useState } from 'react';
+import { Button, Card, Col, Empty, message, Modal, Progress, Row, Space, Spin, Statistic, Table, Tag } from 'antd';
+import { useEffect, useState, useCallback } from 'react';
 import HistoryChart from '../components/HistoryChart';
 import type { ColumnsType } from 'antd/es/table';
 import type { EvalResult } from '../types';
-// ── Mock 数据 ─────────────────────────────────────────────
-const mockResults: EvalResult[] = Array.from({ length: 15 }, (_, i) => ({
-  id: `eval-${String(i + 1).padStart(4, '0')}`,
-  metrics: {
-    hit_rate: 0.72 + Math.random() * 0.25,
-    faithfulness: 0.80 + Math.random() * 0.18,
-    answer_relevancy: 0.75 + Math.random() * 0.22,
-    context_precision: 0.70 + Math.random() * 0.28,
-    context_recall: 0.65 + Math.random() * 0.30,
-  },
-  test_set: ['compliance_qa', 'handbook_qa', 'tech_spec_qa', 'mixed_set'][i % 4],
-  backends_used: ['pgvector', 'pgvector+bm25', 'pgvector+bm25+rerank'],
-  created_at: new Date(Date.now() - i * 86400 * 1000 * 3).toISOString(),
-}));
-
-const hitRateTrend = Array.from({ length: 10 }, (_, i) => ({
-  label: `Run ${i + 1}`,
-  hit_rate: 0.65 + Math.random() * 0.30,
-  faithfulness: 0.75 + Math.random() * 0.20,
-}));
+import { getEvaluationResults, runEvaluation } from '../api/evaluation';
 
 const metricLabels: Record<string, string> = {
   hit_rate: 'Hit Rate',
@@ -36,25 +21,71 @@ const metricLabels: Record<string, string> = {
 export default function EvaluationPanel() {
   const [loading, setLoading] = useState(true);
   const [results, setResults] = useState<EvalResult[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [running, setRunning] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEval, setSelectedEval] = useState<EvalResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await getEvaluationResults({ page, page_size: pageSize });
+      setResults(result.items);
+      setTotal(result.total);
+    } catch (err: any) {
+      setError(err.message || '加载评估数据失败');
+      console.error('Failed to load evaluation results:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setResults(mockResults);
-      setLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
   const handleRunEval = async () => {
     setRunning(true);
-    message.loading('评估运行中...');
-    await new Promise((r) => setTimeout(r, 3000));
-    setRunning(false);
-    message.success('评估完成');
+    try {
+      const result = await runEvaluation({ test_set: 'all' });
+      message.success(`评估任务已提交: ${result.task_id}`);
+      // 稍后自动刷新
+      setTimeout(() => fetchData(), 3000);
+    } catch (err: any) {
+      message.error('评估启动失败: ' + (err.message || '未知错误'));
+    } finally {
+      setRunning(false);
+    }
   };
+
+  if (loading && results.length === 0) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+        <Spin size="large" tip="加载评估数据..." />
+      </div>
+    );
+  }
+
+  if (error && results.length === 0) {
+    return (
+      <div style={{ padding: 24 }}>
+        <Card>
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={`加载失败: ${error}`}
+          >
+            <Button type="primary" onClick={fetchData} icon={<ReloadOutlined />}>
+              重试
+            </Button>
+          </Empty>
+        </Card>
+      </div>
+    );
+  }
 
   // 计算平均指标
   const avgHitRate = results.length > 0
@@ -65,29 +96,30 @@ export default function EvaluationPanel() {
     : 0;
   const totalRuns = results.length;
 
+  // 去重测试集
+  const testSetCount = new Set(results.map(r => r.test_set)).size;
+
   const columns: ColumnsType<EvalResult> = [
     { title: '评估 ID', dataIndex: 'id', key: 'id', width: 140, ellipsis: true },
     { title: '测试集', dataIndex: 'test_set', key: 'test_set', width: 160 },
     {
-      title: 'Hit Rate', dataIndex: 'metrics', key: 'hit_rate', width: 120,
-      render: (m: EvalResult['metrics']) => {
-        const v = m.hit_rate || 0;
+      title: 'Hit Rate', key: 'hit_rate', width: 120,
+      render: (_: unknown, record: EvalResult) => {
+        const v = record.metrics.hit_rate || 0;
         return (
-          <span>
-            <Progress
-              percent={Number((v * 100).toFixed(1))}
-              size="small"
-              format={(pct) => `${pct}%`}
-              strokeColor={v > 0.85 ? '#52c41a' : v > 0.7 ? '#fa8c16' : '#f5222d'}
-            />
-          </span>
+          <Progress
+            percent={Number((v * 100).toFixed(1))}
+            size="small"
+            format={(pct) => `${pct}%`}
+            strokeColor={v > 0.85 ? '#52c41a' : v > 0.7 ? '#fa8c16' : '#f5222d'}
+          />
         );
       },
     },
     {
-      title: 'Faithfulness', dataIndex: 'metrics', key: 'faithfulness', width: 120,
-      render: (m: EvalResult['metrics']) => {
-        const v = m.faithfulness || 0;
+      title: 'Faithfulness', key: 'faithfulness', width: 120,
+      render: (_: unknown, record: EvalResult) => {
+        const v = record.metrics.faithfulness || 0;
         return (
           <Progress
             percent={Number((v * 100).toFixed(1))}
@@ -128,7 +160,7 @@ export default function EvaluationPanel() {
           <Card hoverable>
             <Statistic
               title="平均 Hit Rate"
-              value={(avgHitRate * 100).toFixed(1)}
+              value={Number((avgHitRate * 100).toFixed(1))}
               suffix="%"
               prefix={<CheckCircleFilled style={{ color: avgHitRate > 0.8 ? '#52c41a' : '#fa8c16' }} />}
               valueStyle={{ color: avgHitRate > 0.8 ? '#389e0d' : '#d46b08' }}
@@ -139,7 +171,7 @@ export default function EvaluationPanel() {
           <Card hoverable>
             <Statistic
               title="平均 Faithfulness"
-              value={(avgFaithfulness * 100).toFixed(1)}
+              value={Number((avgFaithfulness * 100).toFixed(1))}
               suffix="%"
               prefix={<CheckCircleFilled style={{ color: avgFaithfulness > 0.85 ? '#52c41a' : '#fa8c16' }} />}
               valueStyle={{ color: avgFaithfulness > 0.85 ? '#389e0d' : '#d46b08' }}
@@ -148,7 +180,7 @@ export default function EvaluationPanel() {
         </Col>
         <Col xs={12} lg={6}>
           <Card hoverable>
-            <Statistic title="评估覆盖测试集" value={4} suffix="个" />
+            <Statistic title="评估覆盖测试集" value={testSetCount} suffix="个" />
           </Card>
         </Col>
       </Row>
@@ -156,10 +188,26 @@ export default function EvaluationPanel() {
       {/* 趋势图 */}
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={12}>
-          <HistoryChart title="Hit Rate 趋势" data={hitRateTrend} dataKey="hit_rate" color="#7C3AED" />
+          <HistoryChart
+            title="Hit Rate 趋势"
+            data={results.length > 0
+              ? results.map((r, i) => ({ label: `Run ${i + 1}`, value: (r.metrics.hit_rate || 0) * 100 }))
+              : [{ label: '暂无数据', value: 0 }]
+            }
+            dataKey="value"
+            color="#7C3AED"
+          />
         </Col>
         <Col xs={24} lg={12}>
-          <HistoryChart title="Faithfulness 趋势" data={hitRateTrend} dataKey="faithfulness" color="#3B82F6" />
+          <HistoryChart
+            title="Faithfulness 趋势"
+            data={results.length > 0
+              ? results.map((r, i) => ({ label: `Run ${i + 1}`, value: (r.metrics.faithfulness || 0) * 100 }))
+              : [{ label: '暂无数据', value: 0 }]
+            }
+            dataKey="value"
+            color="#3B82F6"
+          />
         </Col>
       </Row>
 
@@ -169,7 +217,7 @@ export default function EvaluationPanel() {
         style={{ marginTop: 16 }}
         extra={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => { setLoading(true); setTimeout(() => setLoading(false), 300); }}>
+            <Button icon={<ReloadOutlined />} onClick={fetchData}>
               刷新
             </Button>
             <Button type="primary" icon={<PlayCircleOutlined />} onClick={handleRunEval} loading={running}>
@@ -183,7 +231,13 @@ export default function EvaluationPanel() {
           dataSource={results}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 20, showSizeChanger: true }}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+          }}
           locale={{ emptyText: <Empty description="暂无评估记录" /> }}
           size="middle"
         />

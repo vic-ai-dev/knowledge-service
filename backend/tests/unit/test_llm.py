@@ -94,7 +94,7 @@ class TestLLMFactory:
     def test_create_with_default_settings(self):
         """不传 provider，使用 settings 默认值。"""
         llm = LLMFactory.create()
-        assert isinstance(llm, (OpenAILLM, OllamaLLM))
+        assert isinstance(llm, (OpenAILLM, OllamaLLM, DeepSeekLLM))
 
     def test_registry_is_singleton(self):
         """_registry 是类级别单例。"""

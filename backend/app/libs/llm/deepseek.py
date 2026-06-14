@@ -12,9 +12,15 @@ from __future__ import annotations
 
 from typing import Any, AsyncIterator
 
+import openai
 from openai import AsyncClient
 
 from app.libs.base.base_llm import BaseLLM, LLMResponse
+from app.observability import get_logger
+from app.observability.instrumentation import trace_span, log_llm_call
+from app.libs.llm.openai import LLMError
+
+logger = get_logger(__name__)
 
 DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com"
 
@@ -48,9 +54,8 @@ class DeepSeekLLM(BaseLLM):
             if not api_key:
                 import os
                 api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+
             import httpx
-            # 系统 ALL_PROXY=socks5://... env var 会导致 httpx 被 socksio 依赖阻塞
-            # 使用 trust_env=False 跳过环境变量代理检测
             self._client = AsyncClient(
                 api_key=api_key or "",
                 base_url=self._base_url,
@@ -58,8 +63,54 @@ class DeepSeekLLM(BaseLLM):
             )
         return self._client
 
+    # ── API 调用层（分离以支持 mock） ──────────────────────
+
+    async def _call_api(
+        self,
+        messages: list[dict],
+        model: str,
+        temperature: float,
+        max_tokens: int,
+        stream: bool = False,
+    ) -> Any:
+        """执行实际 API 调用，附带完善的错误处理。"""
+        client = self._get_client()
+        try:
+            return await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=stream,
+            )
+        except openai.APIStatusError as e:
+            error_detail = self._parse_error_response(e)
+            raise LLMError(
+                f"[DeepSeek] API error (HTTP {e.status_code}): {error_detail}"
+            ) from e
+        except openai.APITimeoutError as e:
+            raise LLMError("[DeepSeek] Request timed out") from e
+        except openai.APIConnectionError as e:
+            raise LLMError(
+                f"[DeepSeek] Connection failed: {e}"
+            ) from e
+
+    def _parse_error_response(self, error: openai.APIStatusError) -> str:
+        """解析 API 错误响应体。"""
+        try:
+            body = error.response.json()
+            if "error" in body:
+                err = body["error"]
+                if isinstance(err, dict):
+                    return err.get("message", str(err))
+                return str(err)
+            return error.response.text
+        except Exception:
+            return error.response.text or "Unknown error"
+
     # ── BaseLLM 接口实现 ──────────────────────────────────────
 
+    @trace_span("llm_call")
     async def generate(
         self,
         prompt: str | None = None,
@@ -67,14 +118,12 @@ class DeepSeekLLM(BaseLLM):
         **kwargs: Any,
     ) -> LLMResponse:
         msgs = self._build_messages(prompt, messages)
-        client = self._get_client()
 
-        response = await client.chat.completions.create(
-            model=self.model,
+        response = await self._call_api(
             messages=msgs,
+            model=kwargs.get("model", self.model),
             temperature=kwargs.get("temperature", self._temperature),
             max_tokens=kwargs.get("max_tokens", self._max_tokens),
-            stream=False,
         )
 
         choice = response.choices[0]
@@ -86,6 +135,13 @@ class DeepSeekLLM(BaseLLM):
 
         # DeepSeek 特有 usage 扩展
         usage = response.usage.model_dump() if response.usage else None
+        if usage:
+            log_llm_call(
+                self.model,
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+                metadata={"provider": "deepseek", "reasoning": bool(reasoning_content)},
+            )
 
         return LLMResponse(
             content=content,
@@ -101,11 +157,10 @@ class DeepSeekLLM(BaseLLM):
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         msgs = self._build_messages(prompt, messages)
-        client = self._get_client()
 
-        stream = await client.chat.completions.create(
-            model=self.model,
+        stream = await self._call_api(
             messages=msgs,
+            model=kwargs.get("model", self.model),
             temperature=kwargs.get("temperature", self._temperature),
             max_tokens=kwargs.get("max_tokens", self._max_tokens),
             stream=True,

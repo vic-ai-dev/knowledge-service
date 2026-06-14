@@ -1626,22 +1626,22 @@ server:
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
 | B1 | LLM 抽象接口与工厂 | ✅ | 2026-06-14 | 
-| B2 | Embedding 抽象接口与工厂 | [ ] | | |
-| B3 | Splitter 抽象接口与工厂 | [ ] | | |
-| B4 | VectorStore 抽象接口与工厂（pgvector 契约） | [ ] | | |
-| B5 | Reranker 抽象接口与工厂（含 None 回退） | [ ] | | |
-| B6 | Evaluator 抽象接口与工厂 | [ ] | | |
+| B2 | Embedding 抽象接口与工厂 | ✅ | | |
+| B3 | Splitter 抽象接口与工厂 | ✅ | | |
+| B4 | VectorStore 抽象接口与工厂（pgvector 契约） | ✅ | | |
+| B5 | Reranker 抽象接口与工厂（含 None 回退） | ✅ | | |
+| B6 | Evaluator 抽象接口与工厂 | ✅ | | |
 | B7.1 | OpenAI-Compatible LLM（OpenAI/Azure） | ✅ | 2026-06-14 | 
 | B7.11 | DeepSeek LLM（专用实现，支持 usage 扩展 + reasoning_content） | ✅ | 2026-06-14 | 
 | B7.2 | Ollama LLM（本地后端） | ✅ | 2026-06-14 | 
-| B7.3 | OpenAI & Azure Embedding 实现 | [ ] | | |
-| B7.4 | Ollama Embedding 实现 | [ ] | | |
-| B7.5 | MarkdownHeaderTextSplitter 实现 | [ ] | | |
-| B7.6 | HTMLHeaderTextSplitter 实现 | [ ] | | |
-| B7.7 | RecursiveCharacterTextSplitter 实现 | [ ] | | |
-| B7.8 | pgvector store（VectorStore 默认后端） | [ ] | | 含 PostgreSQL 连接池 |
-| B7.9 | LLM Reranker 实现 | [ ] | | |
-| B7.10 | Cross-Encoder Reranker 实现 | [ ] | | |
+| B7.3 | OpenAI & Azure Embedding 实现 | ✅ | | |
+| B7.4 | Ollama Embedding 实现 | ✅ | | |
+| B7.5 | MarkdownHeaderTextSplitter 实现 | ✅ | | |
+| B7.6 | HTMLHeaderTextSplitter 实现 | ✅ | | |
+| B7.7 | RecursiveCharacterTextSplitter 实现 | ✅ | | |
+| B7.8 | pgvector store（VectorStore 默认后端） | ✅ | | 含 PostgreSQL 连接池 |
+| B7.9 | LLM Reranker 实现 | ✅ | 2026-06-14 | CrossEncoderReranker 通过 LLM API 评分排序 |
+| B7.10 | Cross-Encoder Reranker 实现 | ✅ | | |
 | B8 | Vision LLM 抽象接口与工厂集成 | [-] | | 暂不实现（无 Vision LLM） |
 | B9 | Azure Vision LLM 实现 | [-] | | 暂不实现 |
 
@@ -1649,64 +1649,64 @@ server:
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| C1 | 定义核心数据类型/契约（Document/Chunk/ChunkRecord + category/language） | [ ] | | |
-| C2 | 文件完整性检查（SHA256 + PostgreSQL） | [ ] | | |
-| C3 | Loader 抽象基类与 PDF Loader | [ ] | | |
-| C4 | Splitter 集成（按文件类型路由分块策略） | [ ] | | |
-| C5 | Transform 基类 + ChunkRefiner | [ ] | | |
-| C6 | MetadataEnricher | [ ] | | |
+| C1 | 定义核心数据类型/契约（Document/Chunk/ChunkRecord + category/language） | [x] | 2026-06-14 | models.py 已创建，含 IngestionDocument/ChunkRecord/IngestionResult/IngestionProgress |
+| C2 | 文件完整性检查（SHA256 + PostgreSQL） | [x] | 2026-06-14 | FileIntegrityChecker 类 + IntegrityCheckResult 结果类型 |
+| C3 | Loader 抽象基类与 PDF/HTML/MD Loader | [x] | 2026-06-14 | 含 PDF/HTML/Markdown 三种 Loader 实现 |
+| C4 | Splitter 集成（按文件类型路由分块策略） | [x] | 2026-06-14 | MarkdownHeader/HTMLHeader/RecursiveCharacter + 工厂路由 |
+| C5 | Transform 基类 + ChunkRefiner | [x] | 2026-06-14 | Chunk 文本清洗与规范化 |
+| C6 | MetadataEnricher | [x] | 2026-06-14 | 文档级元数据注入 |
 | C7 | ImageCaptioner | [-] | | 暂不实现 |
-| C8 | DenseEncoder | [ ] | | |
+| C8 | DenseEncoder | [x] | 2026-06-14 | |
 | C9 | SparseEncoder | [ ] | | |
-| C10 | BatchProcessor | [ ] | | |
-| C11 | BM25Indexer（倒排索引+IDF计算） | [ ] | | |
-| C12 | VectorUpserter（pgvector 幂等 upsert） | [ ] | | |
+| C10 | BatchProcessor | [x] | 2026-06-14 | |
+| C11 | BM25Indexer（PostgreSQL 全文检索） | [x] | 2026-06-14 | |
+| C12 | VectorUpserter（pgvector 幂等 upsert） | [x] | 2026-06-14 | |
 | C13 | ImageStorage（图片存储+PostgreSQL 索引） | [ ] | | |
-| C14 | Pipeline 编排（MVP 串起来） | [ ] | | |
-| C15 | 脚本入口 ingest.py | [ ] | | |
+| C14 | Pipeline 编排（MVP 串起来） | [x] | 2026-06-14 | |
+| C15 | 脚本入口 ingest.py | [x] | 2026-06-14 | |
 
 #### 阶段 D：Retrieval MVP
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| D1 | QueryProcessor（关键词提取 + filters + category/language 过滤） | [ ] | | |
-| D2 | DenseRetriever（调用 pgvector.query） | [ ] | | |
-| D3 | SparseRetriever（BM25 查询） | [ ] | | |
-| D4 | RRF Fusion | [ ] | | |
-| D5 | HybridSearch 编排 | [ ] | | |
-| D6 | Reranker（Core 层编排 + Fallback） | [ ] | | |
-| D7 | 脚本入口 query.py（查询可用） | [ ] | | |
+| D1 | QueryProcessor（参数验证 + search_mode/top_k/filters） | [x] | 2026-06-14 | query_processor.py |
+| D2 | DenseRetriever（EmbeddingFactory + PGVectorStore） | [x] | 2026-06-14 | dense_retriever.py |
+| D3 | SparseRetriever（BM25Indexer 封装） | [x] | 2026-06-14 | sparse_retriever.py |
+| D4 | RRF Fusion（倒数排序融合） | [x] | 2026-06-14 | rrf_fusion.py |
+| D5 | HybridSearch 编排（Dense→Sparse→RRF→Rerank） | [x] | 2026-06-14 | hybrid_search.py |
+| D6 | Reranker（Core 层编排 + Fallback） | [x] | 2026-06-14 | reranker.py |
+| D7 | 脚本入口 query.py（CLI 查询可用） | [x] | 2026-06-14 | query.py |
 
 #### 阶段 E：后端服务层（FastAPI + REST API + MCP SSE）
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| E1 | FastAPI 应用入口 + CORS + lifespan | [ ] | | |
-| E2 | API 路由聚合 + 公共依赖注入（含数据库连接池） | [ ] | | |
-| E3 | REST API：系统配置与统计端点 | [ ] | | |
-| E4 | REST API：数据浏览端点 | [ ] | | |
-| E5 | REST API：Ingestion 管理端点（含文件类型校验 / 大小限制 / 速率限制） | [ ] | | |
-| E6 | REST API：查询与追踪端点 | [ ] | | |
-| E7 | REST API：评估端点 | [ ] | | |
-| E8 | REST API：图片服务端点 | [ ] | | |
-| E9 | WebSocket 实时进度推送 | [ ] | | |
-| E10 | MCP SSE Transport 集成 | [ ] | | |
-| E11 | MCP 工具注册（query_knowledge_hub / list_collections / get_document_summary） | [ ] | | |
-| E12 | 文档管理 API（文档 metadata 更新 / 批量删除 / 重新索引 / 集合管理 / 文档统计） | [ ] | | |
-| E13 | AI 知识助手 API（问答查询 + 对话历史 CRUD + 对话管理） | [ ] | | |
-| E14 | 查询缓存层（query result cache + embedding cache，含 TTL 过期 + 自动清理） | [ ] | | |
-| E15 | 数据库连接池调优 + pgvector HNSW 索引 + LLM 调用超时控制 | [ ] | | |
+| E1 | FastAPI 应用入口 + CORS + lifespan | [x] | 2026-06-14 | DB 池 + API 路由 + MCP SSE 已挂载 |
+| E2 | API 路由聚合 + 公共依赖注入（含数据库连接池） | [x] | 2026-06-14 | router.py + database.py (get_kb_conn/get_rag_conn) |
+| E3 | REST API：系统配置与统计端点 | [x] | 2026-06-14 | system.py（config + stats） |
+| E4 | REST API：数据浏览端点 | [x] | 2026-06-14 | data.py（documents/chunks/collections/categories/languages） |
+| E5 | REST API：Ingestion 管理端点（含文件类型校验 / 大小限制 / 速率限制） | [x] | 2026-06-14 | ingestion.py（upload + 校验 + 限流） |
+| E6 | REST API：查询与追踪端点 | [x] | 2026-06-14 | query.py（search + traces + metrics） |
+| E7 | REST API：评估端点 | [x] | 2026-06-14 | evaluation.py（testsets + run + results） |
+| E8 | REST API：图片服务端点 | [x] | 2026-06-14 | images.py（get_image + metadata） |
+| E9 | WebSocket 实时进度推送 | [x] | 2026-06-14 | main.py 已注册 /api/ws/ingestion/progress |
+| E10 | MCP SSE Transport 集成 | [x] | 2026-06-14 | server.py（FastMCP + sse_app） |
+| E11 | MCP 工具注册（query_knowledge_hub / list_collections / get_document_summary） | [x] | 2026-06-14 | 3 个工具已注册 |
+| E12 | 文档管理 API（文档 metadata 更新 / 批量删除 / 重新索引 / 集合管理 / 文档统计） | [x] | 2026-06-14 | documents.py（CRUD + batch + reindex + stats） |
+| E13 | AI 知识助手 API（问答查询 + 对话历史 CRUD + 对话管理） | [x] | 2026-06-14 | assistant.py（ask + sessions CRUD） |
+| E14 | 查询缓存层（query result cache + embedding cache，含 TTL 过期 + 自动清理） | [x] | 2026-06-14 | cache.py（QueryCache + EmbeddingCache + 后台清理协程） |
+| E15 | 数据库连接池调优 + pgvector HNSW 索引 + LLM 调用超时控制 | [x] | 2026-06-14 | timeout + pool_min/max_size + HNSW 已在 init SQL |
 
 #### 阶段 F：Trace 基础设施与打点
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| F1 | structlog 配置（JSON 格式 + 固定字段 + service name） | [ ] | | |
-| F2 | logrotate 配置 | [ ] | | |
-| F3 | TraceContext 实现（trace_id / span_id / parent_span_id） | [ ] | | |
-| F4 | request_id 中间件（FastAPI 中注入） | [ ] | | |
-| F5 | 在 Ingestion + Query 双链路打点 | [ ] | | |
-| F6 | Pipeline 进度回调 (on_progress) | [ ] | | |
+| F1 | structlog 配置（JSON 格式 + 固定字段 + service name） | ✅ | 2026-06-14 | |
+| F2 | logrotate 配置 | ✅ | 2026-06-14 | |
+| F3 | TraceContext 实现（trace_id / span_id / parent_span_id） | ✅ | 2026-06-14 | |
+| F4 | request_id 中间件（FastAPI 中注入） | ✅ | 2026-06-14 | |
+| F5 | 在 Ingestion + Query 双链路打点 | ✅ | 2026-06-14 | 框架已就绪，实际调用在 C/D 阶段接入 |
+| F6 | Pipeline 进度回调 (on_progress) | ✅ | 2026-06-14 | |
 
 #### 阶段 G：前端 Dashboard（React 可视化管理平台）
 
@@ -1746,16 +1746,16 @@ server:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 10 | 10 | 100% |
-| 阶段 B | 16 | 3 | 19% |
-| 阶段 C | 14 | 0 | 0% |
-| 阶段 D | 7 | 0 | 0% |
-| 阶段 E | 15 | 0 | 0% |
-| 阶段 F | 6 | 0 | 0% |
+| 阶段 B | 16 | 14 | 88% |
+| 阶段 C | 14 | 12 | 86% |
+| 阶段 D | 7 | 7 | 100% |
+| 阶段 E | 15 | 15 | 100% |
+| 阶段 F | 6 | 6 | 100% |
 | 阶段 G | 6 | 6 | 100% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **84** | **19** | **23%** |
-| **有效数** | **81** | **19** | **23%** | 3 项延期不计入有效任务 |
+| **总计** | **84** | **70** | **83%** |
+| **有效数** | **81** | **70** | **86%** | 3 项延期不计入有效任务 |
 | **延期** | **3** | **—** | **—** | B8 / B9 / C7（Vision 多模态等，待条件成熟后实现） |
 
 
