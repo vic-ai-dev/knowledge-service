@@ -1,0 +1,23 @@
+/* ============================================================================
+ * Knowledge Service — 全局基础样式
+ * ============================================================================
+ * 由 Ant Design 的 ConfigProvider 处理主题，此文件仅做全局重置与过渡。
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+}

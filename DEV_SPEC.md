@@ -59,7 +59,7 @@ flowchart TB
 | 维度 | 目标 |
 |------|------|
 | **后端** | FastAPI 统一 HTTP 入口，同时提供 REST API（供前端）和 MCP SSE Transport（供 Copilot/Claude） |
-| **前端** | React + TypeScript + Ant Design 5 构建 6 页可视化管理平台 |
+| **前端** | React + TypeScript + Ant Design 5 构建 8 页可视化管理平台 |
 | **RAG 引擎** | 全链路可插拔架构，支持 Ingestion 摄取与 Query 检索双链路 |
 | **存储** | PostgreSQL 存储业务数据，pgvector 扩展存储向量，支持多种文档类型（员工手册、合规指南、技术规范、架构文档）与中英文双语 |
 | **可观测性** | structlog 结构化日志 + TraceContext 驱动，全链路白盒追踪 |
@@ -111,7 +111,7 @@ sequenceDiagram
 
 ### 2.3 React 可视化管理平台
 
-由 6 个功能页面组成的 SPA，替代传统的 Streamlit Dashboard：
+由 8 个功能页面组成的 SPA：
 
 | 页面 | 路由 | 核心功能 |
 |------|------|---------|
@@ -219,11 +219,9 @@ flowchart LR
 | `tags` | 标签 | MetadataEnricher 生成 |
 
 ### 2.7 多模态图片处理
-
-> ❌ 暂不实现 — 无 Vision LLM API，见 TODO 清单
-
-本项目原计划采用 Image-to-Text 策略利用 Vision LLM 将图片转化为文本描述，实现"搜文字出图"。
-当前因不具备 Vision LLM API 暂不实现此功能。
+ 
+> ❌ 当前因不具备 Vision LLM API 暂不实现此功能，详见 TODO 清单
+ 
 
 ### 2.8 结构化日志体系
 
@@ -276,7 +274,7 @@ flowchart LR
     DEFAULT --> TRANS
     TRANS["Transform<br/>Refine + Enrich + Caption"]
     TRANS --> EMBED["Embedding<br/>Dense + Sparse"]
-    EMBED --> UPSERT["Upsert<br/>pgvector + PostgreSQL + BM25"]
+    EMBED --> UPSERT["Upsert<br/>pgvector + PostgreSQL + pg_bm25"]
 ```
 
 **Loader 阶段**：
@@ -299,7 +297,6 @@ flowchart LR
 **Transform 阶段**（原子化、幂等、可独立重试）：
 - Chunk Refiner：智能重组去噪，合并语义紧密片段
 - Metadata Enricher：利用 LLM 生成 Title / Summary / Tags
-- Image Captioner：调用 Vision LLM 生成图片描述，缝合进 Chunk
 
 **Embedding 阶段**：
 - Dense：调用 Embedding 模型生成高维浮点向量
@@ -309,14 +306,14 @@ flowchart LR
 
 **Upsert 阶段**：
 - **pgvector**：存储 Dense Vector + Chunk Content + Metadata，使用 PostgreSQL 的 `vector` 数据类型
-- **BM25 Index**：关键词倒排索引，存储在 PostgreSQL 或本地文件
+- **pg_bm25 Index**：基于 pg_bm25 扩展的关键词倒排索引，存储在 PostgreSQL 中
 - **Image Storage**：图片文件存储在本地文件系统
 - 幂等设计：`chunk_id = hash(source_path + section_path + content_hash)`
 
 **文档生命周期管理** (`DocumentManager`)：
 - `list_documents()` — 按 category / language 筛选列出文档
 - `get_document_detail()` — 获取文档详情及所有 Chunk
-- `delete_document()` — 跨存储协调删除（pgvector + BM25 + Image + PostgreSQL）
+- `delete_document()` — 跨存储协调删除（pgvector + pg_bm25 + Image + PostgreSQL）
 - `get_collection_stats()` — 按 category 统计
 
 #### 3.1.2 检索流水线 (Query Pipeline)
@@ -447,7 +444,41 @@ flowchart TB
 - 当全局禁用时，`rerank` 参数无效（固定为 false）
 - 当全局启用时，`rerank` 参数默认为 true，可单次关闭
 
-#### 3.2.3 MCP SSE Transport
+#### 3.2.3 WebSocket 实时推送
+
+提供 Ingestion Pipeline 进度实时推送，前端通过 WebSocket 连接订阅运行状态。适用于大文件摄取时的异步进度展示场景。
+
+**端点**：
+
+| 端点 | 方向 | 描述 |
+|------|------|------|
+| `WS /api/ws/ingestion/{run_id}` | 服务端→客户端 | Pipeline 执行进度实时推送 |
+
+**事件格式**：
+
+```json
+{
+  "event": "progress",
+  "data": {
+    "run_id": "uuid",
+    "stage": "loading / splitting / embedding / indexing",
+    "progress": 0.45,
+    "message": "正在处理 Chunk 45/100"
+  }
+}
+```
+
+**事件类型**：
+
+| 事件 | 说明 |
+|------|------|
+| `progress` | Pipeline 阶段进度更新 |
+| `complete` | 整个 Pipeline 执行完成 |
+| `error` | 执行过程中发生错误 |
+
+**实现方式**：FastAPI 原生 WebSocket 端点，Pipeline 执行中通过 `on_progress` 回调广播状态。
+
+#### 3.2.4 MCP SSE Transport
 
 **端点**：
 - `GET /mcp/sse` — 建立 SSE 连接，服务端推送 `event: endpoint` → 客户端获取 `sessionId`
@@ -463,7 +494,7 @@ flowchart TB
 
 **实现方式**：使用 MCP SDK 的 SSE transport 支持，在同一 FastAPI 进程中集成，与 REST API 共享同一套 RAG 引擎。
 
-#### 3.2.4 数据库配置
+#### 3.2.5 数据库配置
 
 **PostgreSQL（业务数据）**：
 
@@ -486,14 +517,232 @@ flowchart TB
 | 用途 | Dense Vector 语义检索 |
 | 扩展 | `pgvector`（提供 `vector` 数据类型与 `<=>` 距离算子） |
 
+**pg_bm25（全文检索数据）**：
+
+| 项目 | 值 |
+|------|-----|
+| 主机 | `localhost:5432` |
+| 用户名 | `postgres` |
+| 密码 | `root123456` |
+| 数据库 | `knowledge_rag` |
+| 用途 | 全文检索 + BM25 倒排索引 |
+| 扩展 | `pg_bm25` + `pg_search`（提供 BM25 索引与全文检索能力，基于 `pg_bm25` 扩展支持 BM25 算法，基于 `pg_search` 扩展支持全文检索与混合搜索） |
+
+
+#### 3.2.6 表结构设计
+
+分为两个数据库：`knowledge`（业务数据）和 `knowledge_rag`（向量 + 全文检索）。
+
+**knowledge 库（业务数据）：**
+
+```sql
+-- 文档元数据
+CREATE TABLE documents (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title           TEXT NOT NULL,
+    doc_type        TEXT NOT NULL DEFAULT 'pdf',                        -- pdf / md / html
+    category        TEXT NOT NULL DEFAULT 'employee_handbook',          -- employee_handbook / compliance / technical_spec / architecture
+    language        TEXT NOT NULL DEFAULT 'zh',                         -- zh / en
+    source_path     TEXT NOT NULL,
+    file_hash       TEXT NOT NULL,                                      -- SHA256
+    file_size       BIGINT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',                    -- pending / processing / completed / failed
+    tags            JSONB DEFAULT '[]',
+    summary         TEXT,
+    metadata        JSONB DEFAULT '{}',                                 -- 扩展字段
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX idx_documents_file_hash ON documents(file_hash);
+CREATE INDEX idx_documents_category ON documents(category);
+CREATE INDEX idx_documents_language ON documents(language);
+CREATE INDEX idx_documents_status ON documents(status);
+```
+
+```sql
+-- 文件摄取历史
+CREATE TABLE ingestion_history (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id     UUID REFERENCES documents(id) ON DELETE CASCADE,
+    source_path     TEXT NOT NULL,
+    file_hash       TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',                    -- pending / running / completed / failed
+    total_chunks    INTEGER DEFAULT 0,
+    total_images    INTEGER DEFAULT 0,
+    error_message   TEXT,
+    started_at      TIMESTAMPTZ,
+    completed_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_ingestion_document_id ON ingestion_history(document_id);
+CREATE INDEX idx_ingestion_status ON ingestion_history(status);
+```
+
+```sql
+-- 图片索引（预留，当前暂不实现图片提取与索引）
+CREATE TABLE image_index (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id     UUID REFERENCES documents(id) ON DELETE CASCADE,
+    chunk_id        TEXT,
+    image_path      TEXT NOT NULL,
+    image_hash      TEXT,
+    alt_text        TEXT,
+    width           INTEGER,
+    height          INTEGER,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_image_document_id ON image_index(document_id);
+```
+
+```sql
+-- 评估结果
+CREATE TABLE evaluation_results (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id          TEXT NOT NULL,
+    evaluator       TEXT NOT NULL,                                      -- ragas / custom
+    category        TEXT,                                               -- 按分类评估
+    metrics         JSONB NOT NULL,
+    total_queries   INTEGER NOT NULL DEFAULT 0,
+    passed_queries  INTEGER NOT NULL DEFAULT 0,
+    avg_score       REAL DEFAULT 0,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_eval_run_id ON evaluation_results(run_id);
+CREATE INDEX idx_eval_category ON evaluation_results(category);
+```
+
+```sql
+-- 业务追踪日志（Query / Ingestion）
+CREATE TABLE traces (
+    id                BIGSERIAL PRIMARY KEY,
+    trace_id          UUID NOT NULL UNIQUE,
+    trace_type        TEXT NOT NULL,                                    -- query / ingestion
+    status            TEXT NOT NULL DEFAULT 'completed',
+    stages            JSONB NOT NULL DEFAULT '{}',
+    total_latency_ms  INTEGER DEFAULT 0,                                -- p50/p95 延迟由此字段计算
+    input_tokens      INTEGER DEFAULT 0,                                -- 令牌使用情况
+    output_tokens     INTEGER DEFAULT 0,
+    total_tokens      INTEGER DEFAULT 0,
+    cache_hit         BOOLEAN DEFAULT FALSE,                            -- 缓存命中率
+    rejected          BOOLEAN DEFAULT FALSE,                            -- 拒绝率
+    rejection_reason  TEXT,
+    compliance_score  REAL,                                             -- 答案符合率
+    metadata          JSONB DEFAULT '{}',
+    started_at        TIMESTAMPTZ DEFAULT NOW(),
+    completed_at      TIMESTAMPTZ
+);
+CREATE INDEX idx_traces_trace_id ON traces(trace_id);
+CREATE INDEX idx_traces_type ON traces(trace_type);
+CREATE INDEX idx_traces_started_at ON traces(started_at DESC);
+```
+
+```sql
+-- 查询缓存
+CREATE TABLE query_cache (
+    cache_key       TEXT PRIMARY KEY,
+    query_text      TEXT NOT NULL,
+    search_mode     TEXT,
+    rerank          BOOLEAN,
+    results         JSONB NOT NULL,
+    hit_count       INTEGER DEFAULT 1,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ DEFAULT NOW() + INTERVAL '1 hour'
+);
+CREATE INDEX idx_query_cache_expires ON query_cache(expires_at);
+```
+
+```sql
+-- Embedding 缓存
+CREATE TABLE embedding_cache (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider        TEXT NOT NULL,
+    model           TEXT NOT NULL,
+    content_hash    TEXT NOT NULL,
+    embedding       vector(1536),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(provider, model, content_hash)
+);
+```
+
+```sql
+-- 对话列表
+CREATE TABLE conversations (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title           TEXT NOT NULL DEFAULT '新对话',
+    search_mode     TEXT DEFAULT 'hybrid',                              -- vector_only / hybrid
+    rerank_enabled  BOOLEAN DEFAULT TRUE,
+    message_count   INTEGER DEFAULT 0,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_conversations_updated ON conversations(updated_at DESC);
+```
+
+```sql
+-- 对话消息
+CREATE TABLE conversation_messages (
+    id              BIGSERIAL PRIMARY KEY,
+    conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
+    role            TEXT NOT NULL,                                       -- user / assistant
+    content         TEXT NOT NULL,
+    citations       JSONB DEFAULT '[]',
+    tokens          INTEGER DEFAULT 0,
+    latency_ms      INTEGER DEFAULT 0,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_messages_conv_id ON conversation_messages(conversation_id);
+CREATE INDEX idx_messages_created ON conversation_messages(created_at);
+```
+
+**knowledge_rag 库（向量 + 全文检索）：**
+
+```sql
+-- pgvector 扩展
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- 文档 Chunk（含 Dense 向量 + Metadata）
+CREATE TABLE document_chunks (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id     UUID NOT NULL,
+    chunk_index     INTEGER NOT NULL,
+    content         TEXT NOT NULL,
+    content_hash    TEXT NOT NULL,                                       -- 内容 SHA256，差量更新依据
+    section_title   TEXT,
+    doc_type        TEXT NOT NULL,
+    category        TEXT NOT NULL,
+    language        TEXT NOT NULL,
+    embedding       vector(1536),                                        -- Dense 语义向量
+    metadata        JSONB DEFAULT '{}',
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_chunks_document_id ON document_chunks(document_id);
+CREATE INDEX idx_chunks_category ON document_chunks(category);
+CREATE INDEX idx_chunks_language ON document_chunks(language);
+CREATE INDEX idx_chunks_content_hash ON document_chunks(content_hash);
+-- HNSW 索引（推荐，查询性能优于 IVFFlat，适合高并发只读场景）
+CREATE INDEX idx_chunks_embedding_hnsw ON document_chunks
+    USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 200);
+```
+
+```sql
+-- pg_bm25 + pg_search 扩展
+CREATE EXTENSION IF NOT EXISTS pg_bm25;
+CREATE EXTENSION IF NOT EXISTS pg_search;
+
+-- BM25 全文搜索索引（基于 pg_bm25 扩展的倒排索引）
+CREATE INDEX idx_chunks_bm25 ON document_chunks
+    USING bm25 (content, section_title, category, language)
+    WITH (key_field = 'id');
+```
+
 ### 3.3 前端技术选型
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| React | 18+ | UI 框架 |
+| React | 19+ | UI 框架 |
 | TypeScript | 5+ | 类型安全 |
 | Vite | 5+ | 构建工具 |
-| React Router | v6 | SPA 路由 |
+| React Router | v7 | SPA 路由 |
 | Axios | 1+ | HTTP 客户端 |
 | Ant Design | 5 | UI 组件库 |
 | Recharts | 2+ | 图表组件 |
@@ -535,7 +784,7 @@ flowchart TB
 | DeepSeek | 成本优化 | `provider: deepseek` |
 | Ollama | 完全离线、隐私敏感 | `provider: ollama` |
 
-**Vision LLM**：扩展 `BaseVisionLLM` 接口支持图像输入，当前实现 Azure OpenAI Vision (GPT-4o)。
+
 
 **向量存储**：`BaseVectorStore` 接口，默认实现 pgvector。
 
@@ -662,21 +911,6 @@ structlog.configure(
 | `/query/traces/:id` | 查询详情 | `GET /api/query/traces/{trace_id}` |
 | `/evaluation` | 评估面板 | `POST /api/evaluation/run`, `GET /api/evaluation/*` |
 
-### 3.6 多模态图片处理设计
-
-> ❌ 暂不实现 — 无 Vision LLM API，见 TODO 清单
-
-本项目原计划采用 Image-to-Text 策略利用 Vision LLM 将图片转化为文本描述，实现"搜文字出图"。
-当前因不具备 Vision LLM API（如 GPT-4o、Qwen-VL 等）暂不实现此功能。
-
-**影响范围**：
-- Image Captioner 组件 (`backend/ingestion/transform/image_captioner.py`)
-- Vision LLM 抽象接口 (`backend/libs/llm/base_vision_llm.py`)
-- 多模态响应组装 (`backend/core/response/multimodal_assembler.py`)
-- 前端图片预览组件 (`frontend/src/components/ImagePreview.tsx`)
-
-以上代码保留在目录结构中作为占位，但不纳入当前开发排期。
-待具备 Vision LLM 条件后，可参考 TODO 清单重新启用。
 
 ### 3.7 性能设计
 
@@ -837,8 +1071,7 @@ flowchart TB
     subgraph Storage["Storage Layer"]
         PG["PostgreSQL<br/>knowledge 库<br/>- ingestion_history<br/>- image_index<br/>- evaluation_results<br/>- traces"]
         PGV["pgvector<br/>knowledge_rag 库<br/>- dense vectors<br/>- chunk contents<br/>- metadata"]
-        BM25["BM25 Index<br/>(本地文件)"]
-        IMG["Image Files<br/>data/images/"]
+        BM25["pg_bm25（PostgreSQL）<br/>全文检索 + BM25 Index"]
     end
 
     REACT --> API
@@ -856,7 +1089,6 @@ flowchart TB
     LIBS --> PG
     LIBS --> PGV
     ING --> BM25
-    ING --> IMG
     OBS -.-> PG
 ```
 
@@ -866,122 +1098,158 @@ flowchart TB
 knowledge-service/
 │
 ├── backend/                                # FastAPI 后端
-│   ├── __init__.py
-│   ├── main.py                             # FastAPI 应用入口
-│   │
-│   ├── api/                                # REST API & WebSocket
+│   ├── app/                                # FastAPI 应用代码
 │   │   ├── __init__.py
-│   │   ├── router.py                       # 主路由聚合
-│   │   ├── dependencies.py                 # 公共依赖注入
-│   │   ├── config.py                       # /api/health, /api/config, /api/stats
-│   │   ├── documents.py                    # /api/collections, /api/documents/*
-│   │   ├── ingestion.py                    # /api/ingestion/*
-│   │   ├── assistant.py                    # /api/assistant/*（智能问答 + 对话管理）
-│   │   ├── query.py                        # /api/query, /api/query/traces
-│   │   ├── traces.py                       # /api/ingestion/traces/*
-│   │   ├── evaluation.py                   # /api/evaluation/*
-│   │   └── images.py                       # /api/images/*
+│   │   ├── main.py                         # FastAPI 应用入口
+│   │   │
+│   │   ├── api/                            # REST API & WebSocket
+│   │   │   ├── __init__.py
+│   │   │   ├── router.py                   # 主路由聚合
+│   │   │   ├── dependencies.py             # 公共依赖注入
+│   │   │   ├── config.py                   # /api/health, /api/config, /api/stats
+│   │   │   ├── documents.py                # /api/collections, /api/documents/*
+│   │   │   ├── ingestion.py                # /api/ingestion/*
+│   │   │   ├── assistant.py                # /api/assistant/*（智能问答 + 对话管理）
+│   │   │   ├── query.py                    # /api/query, /api/query/traces
+│   │   │   ├── traces.py                   # /api/ingestion/traces/*
+│   │   │   ├── evaluation.py               # /api/evaluation/*
+│   │   │   └── images.py                   # /api/images/*
+│   │   │
+│   │   ├── mcp/                            # MCP SSE Transport
+│   │   │   ├── __init__.py
+│   │   │   └── sse_server.py               # SSE 会话管理 + 工具注册
+│   │   │
+│   │   ├── core/                           # Core 层
+│   │   │   ├── __init__.py
+│   │   │   ├── settings.py                 # 配置加载与校验
+│   │   │   ├── types.py                    # 核心数据类型契约
+│   │   │   ├── query_engine/               # 查询引擎
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── query_processor.py
+│   │   │   │   ├── hybrid_search.py
+│   │   │   │   ├── dense_retriever.py
+│   │   │   │   ├── sparse_retriever.py
+│   │   │   │   ├── fusion.py
+│   │   │   │   └── reranker.py
+│   │   │   ├── response/                   # 响应构建
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── response_builder.py
+│   │   │   │   └── citation_generator.py
+│   │   │   └── trace/                      # 追踪模块
+│   │   │       ├── __init__.py
+│   │   │       ├── trace_context.py
+│   │   │       └── trace_collector.py
+│   │   │
+│   │   ├── ingestion/                      # Ingestion 层
+│   │   │   ├── __init__.py
+│   │   │   ├── pipeline.py                 # Pipeline 主流程
+│   │   │   ├── document_manager.py         # 文档生命周期管理
+│   │   │   ├── chunking/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── document_chunker.py     # 按文件类型路由分块策略
+│   │   │   │   └── chunk_strategy.py       # 分块策略定义（MD/HTML/默认）
+│   │   │   ├── transform/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── base_transform.py
+│   │   │   │   ├── chunk_refiner.py
+│   │   │   │   └── metadata_enricher.py
+│   │   │   ├── embedding/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── dense_encoder.py
+│   │   │   │   ├── sparse_encoder.py
+│   │   │   │   └── batch_processor.py
+│   │   │   └── storage/
+│   │   │       ├── __init__.py
+│   │   │       ├── vector_upserter.py      # pgvector Upsert
+│   │   │       ├── bm25_indexer.py
+│   │   │       └── image_storage.py
+│   │   │
+│   │   ├── libs/                           # 可插拔抽象层
+│   │   │   ├── __init__.py
+│   │   │   ├── loader/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── base_loader.py
+│   │   │   │   ├── pdf_loader.py
+│   │   │   │   └── file_integrity.py
+│   │   │   ├── llm/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── base_llm.py
+│   │   │   │   ├── llm_factory.py
+│   │   │   │   ├── azure_llm.py
+│   │   │   │   ├── openai_llm.py
+│   │   │   │   ├── ollama_llm.py
+│   │   │   │   └── deepseek_llm.py
+│   │   │   ├── embedding/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── base_embedding.py
+│   │   │   │   ├── embedding_factory.py
+│   │   │   │   ├── openai_embedding.py
+│   │   │   │   ├── azure_embedding.py
+│   │   │   │   └── ollama_embedding.py
+│   │   │   ├── splitter/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── base_splitter.py
+│   │   │   │   ├── splitter_factory.py
+│   │   │   │   ├── markdown_header_splitter.py
+│   │   │   │   ├── html_header_splitter.py
+│   │   │   │   └── recursive_splitter.py
+│   │   │   ├── vector_store/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── base_vector_store.py
+│   │   │   │   ├── vector_store_factory.py
+│   │   │   │   └── pgvector_store.py
+│   │   │   ├── reranker/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── base_reranker.py
+│   │   │   │   ├── reranker_factory.py
+│   │   │   │   ├── cross_encoder_reranker.py
+│   │   │   │   └── llm_reranker.py
+│   │   │   └── evaluator/
+│   │   │       ├── __init__.py
+│   │   │       ├── base_evaluator.py
+│   │   │       ├── evaluator_factory.py
+│   │   │       ├── ragas_evaluator.py
+│   │   │       └── custom_evaluator.py
+│   │   │
+│   │   └── observability/                  # 可观测性
+│   │       ├── __init__.py
+│   │       ├── logger.py                   # structlog 配置
+│   │       └── evaluation/
+│   │           ├── __init__.py
+│   │           ├── eval_runner.py
+│   │           └── composite_evaluator.py
 │   │
-│   ├── mcp/                                # MCP SSE Transport
+│   ├── config/
+│   │   ├── settings.yaml                   # 系统配置
+│   │   └── logrotate.conf                  # 日志轮转配置
+│   ├── logs/
+│   │   └── service.jsonl
+│   ├── scripts/
 │   │   ├── __init__.py
-│   │   └── sse_server.py                   # SSE 会话管理 + 工具注册
-│   │
-│   ├── core/                               # Core 层
+│   │   ├── init_knowledge_db.sql
+│   │   └── init_knowledge_rag_db.sql
+│   ├── tests/
 │   │   ├── __init__.py
-│   │   ├── settings.py                     # 配置加载与校验
-│   │   ├── types.py                        # 核心数据类型契约
-│   │   ├── query_engine/                   # 查询引擎
-│   │   │   ├── query_processor.py
-│   │   │   ├── hybrid_search.py
-│   │   │   ├── dense_retriever.py
-│   │   │   ├── sparse_retriever.py
-│   │   │   ├── fusion.py
-│   │   │   └── reranker.py
-│   │   ├── response/                       # 响应构建
-│   │   │   ├── response_builder.py
-│   │   │   ├── citation_generator.py
-│   │   │   └── multimodal_assembler.py
-│   │   └── trace/                          # 追踪模块
-│   │       ├── trace_context.py
-│   │       └── trace_collector.py
-│   │
-│   ├── ingestion/                          # Ingestion 层
-│   │   ├── __init__.py
-│   │   ├── pipeline.py                     # Pipeline 主流程
-│   │   ├── document_manager.py             # 文档生命周期管理
-│   │   ├── chunking/
-│   │   │   ├── document_chunker.py         # 按文件类型路由分块策略
-│   │   │   ├── chunk_strategy.py           # 分块策略定义（MD/HTML/默认）
-│   │   │   └── __init__.py
-│   │   ├── transform/
-│   │   │   ├── base_transform.py
-│   │   │   ├── chunk_refiner.py
-│   │   │   ├── metadata_enricher.py
-│   │   │   └── image_captioner.py
-│   │   ├── embedding/
-│   │   │   ├── dense_encoder.py
-│   │   │   ├── sparse_encoder.py
-│   │   │   └── batch_processor.py
-│   │   └── storage/
-│   │       ├── vector_upserter.py           # pgvector Upsert
-│   │       ├── bm25_indexer.py
-│   │       └── image_storage.py
-│   │
-│   ├── libs/                               # 可插拔抽象层
-│   │   ├── __init__.py
-│   │   ├── loader/
-│   │   │   ├── base_loader.py
-│   │   │   ├── pdf_loader.py
-│   │   │   └── file_integrity.py
-│   │   ├── llm/
-│   │   │   ├── base_llm.py
-│   │   │   ├── base_vision_llm.py
-│   │   │   ├── llm_factory.py
-│   │   │   ├── azure_llm.py
-│   │   │   ├── openai_llm.py
-│   │   │   ├── ollama_llm.py
-│   │   │   ├── deepseek_llm.py
-│   │   │   ├── azure_vision_llm.py
-│   │   │   └── openai_vision_llm.py
-│   │   ├── embedding/
-│   │   │   ├── base_embedding.py
-│   │   │   ├── embedding_factory.py
-│   │   │   ├── openai_embedding.py
-│   │   │   ├── azure_embedding.py
-│   │   │   └── ollama_embedding.py
-│   │   ├── splitter/
-│   │   │   ├── base_splitter.py
-│   │   │   ├── splitter_factory.py
-│   │   │   ├── markdown_header_splitter.py
-│   │   │   ├── html_header_splitter.py
-│   │   │   └── recursive_splitter.py
-│   │   ├── vector_store/
-│   │   │   ├── base_vector_store.py
-│   │   │   ├── vector_store_factory.py
-│   │   │   └── pgvector_store.py
-│   │   ├── reranker/
-│   │   │   ├── base_reranker.py
-│   │   │   ├── reranker_factory.py
-│   │   │   ├── cross_encoder_reranker.py
-│   │   │   └── llm_reranker.py
-│   │   └── evaluator/
-│   │       ├── base_evaluator.py
-│   │       ├── evaluator_factory.py
-│   │       ├── ragas_evaluator.py
-│   │       └── custom_evaluator.py
-│   │
-│   └── observability/                      # 可观测性
-│       ├── __init__.py
-│       ├── logger.py                       # structlog 配置
-│       └── evaluation/
-│           ├── eval_runner.py
-│           └── composite_evaluator.py
-│
+│   │   ├── unit/
+│   │   ├── integration/
+│   │   ├── e2e/
+│   │   └── fixtures/
+│   │       ├── sample_documents/
+│   │       │   ├── employee_handbook_zh.md
+│   │       │   ├── compliance_guide_en.md
+│   │       │   ├── technical_spec.html
+│   │       │   └── architecture_overview.pdf
+│   │       └── golden_test_set.json
+│   ├── pyproject.toml
 ├── frontend/                               # React 前端
 │   ├── index.html
 │   ├── package.json
 │   ├── vite.config.ts
 │   ├── tsconfig.json
+│   ├── tsconfig.app.json
+│   ├── tsconfig.node.json
+│   ├── eslint.config.js
+│   ├── .gitignore
 │   └── src/
 │       ├── main.tsx
 │       ├── App.tsx
@@ -991,6 +1259,7 @@ knowledge-service/
 │       │   ├── config.ts
 │       │   ├── documents.ts
 │       │   ├── ingestion.ts
+│       │   ├── assistant.ts
 │       │   ├── query.ts
 │       │   └── evaluation.ts
 │       ├── types/
@@ -999,51 +1268,29 @@ knowledge-service/
 │       │   └── useWebSocket.ts
 │       ├── pages/
 │       │   ├── Overview.tsx
+│       │   ├── DocumentCenter.tsx
+│       │   ├── AIAssistant.tsx
 │       │   ├── DataBrowser.tsx
 │       │   ├── IngestionManager.tsx
 │       │   ├── IngestionTraces.tsx
 │       │   ├── QueryTraces.tsx
 │       │   └── EvaluationPanel.tsx
 │       └── components/
-│           ├── Layout.tsx
-│           ├── Sidebar.tsx
+│           ├── AppLayout.tsx
+│           ├── HistoryChart.tsx
+│           ├── MetricsCard.tsx
 │           ├── ConfigCard.tsx
+│           ├── ChatMessage.tsx
+│           ├── CitationCard.tsx
 │           ├── WaterfallChart.tsx
 │           ├── DenseSparseCompare.tsx
 │           ├── RerankComparison.tsx
-│           ├── ImagePreview.tsx
+│           ├── MetricsPanel.tsx
 │           └── ProgressOverlay.tsx
 │
-├── config/
-│   ├── settings.yaml                        # 系统配置
-│   └── logrotate.conf                       # 日志轮转配置
-├── data/
-│   ├── uploads/
-│   ├── images/
-│   └── bm25/                                # BM25 索引文件
-├── logs/
-│   └── service.jsonl                        # structlog JSON Lines
-├── scripts/
-│   ├── ingest.py
-│   ├── query.py
-│   └── init_db.py                           # 数据库初始化脚本
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   ├── e2e/
-│   └── fixtures/
-│       ├── sample_documents/
-│       │   ├── employee_handbook_zh.md       # 中文员工手册样本
-│       │   ├── compliance_guide_en.md        # 英文合规指南样本
-│       │   ├── technical_spec.html           # 技术规范 HTML 样本
-│       │   └── architecture_overview.pdf     # 架构文档 PDF 样本
-│       └── golden_test_set.json
-├── pyproject.toml
 ├── DEV_SPEC.md
-├── DEV_SPEC_ORI.md
 └── README.md
 ```
-
 ### 5.3 模块说明
 
 #### 5.3.1 后端 API 层
@@ -1054,7 +1301,7 @@ knowledge-service/
 | `api/router.py` | REST 路由聚合 | APIRouter 分组，tags |
 | `api/dependencies.py` | 公共依赖注入 | get_settings / get_document_manager / get_query_engine / get_db_pool |
 | `api/config.py` | 系统概览 | 从 Settings 读取配置、DocumentManager 读取统计 |
-| `api/documents.py` | 数据浏览 | 封装 pgvector / BM25 / ImageStorage 读取 |
+| `api/documents.py` | 数据浏览 | 封装 pgvector / pg_bm25 / ImageStorage 读取 |
 | `api/ingestion.py` | 摄取管理 | 文件上传（自动识别类型）、Pipeline 触发、进度查询、文档删除 |
 | `api/query.py` | 查询 + 追踪 | HybridSearch 调用、Trace 文件读取 |
 | `api/evaluation.py` | 评估 | EvalRunner 触发、指标读取、历史趋势 |
@@ -1075,7 +1322,6 @@ knowledge-service/
 | `reranker.py` | 精排重排 | CrossEncoder / LLM Rerank / Fallback |
 | `response_builder.py` | 响应构建 | MCP 响应格式化 |
 | `citation_generator.py` | 引用生成 | 结构化引用列表 |
-| `multimodal_assembler.py` | 多模态组装 | Text + Image Base64 |
 | `trace_context.py` | 追踪上下文 | trace_id 生成、阶段记录、finish 汇总 |
 | `trace_collector.py` | 追踪收集器 | 收集 trace 并触发 structlog 写出 |
 
@@ -1084,13 +1330,12 @@ knowledge-service/
 | 模块 | 职责 | 关键技术点 |
 |------|------|----------|
 | `pipeline.py` | Pipeline 编排 | 串行执行、异常处理、增量更新、on_progress 回调 |
-| `document_manager.py` | 文档生命周期 | list/delete/stats，跨存储协调（pgvector + BM25 + Image + PostgreSQL） |
+| `document_manager.py` | 文档生命周期 | list/delete/stats，跨存储协调（pgvector + pg_bm25 + Image + PostgreSQL） |
 | `document_chunker.py` | 分块策略路由 | 按文件类型选择 MD / HTML / 默认分块器 |
 | `chunk_strategy.py` | 分块策略定义 | MarkdownHeaderTextSplitter / HTMLHeaderTextSplitter / RecursiveCharacterTextSplitter |
 | `base_transform.py` | Transform 抽象 | 原子化、幂等、可独立重试 |
 | `chunk_refiner.py` | Chunk 智能重组 | 规则去噪 + 可选 LLM |
 | `metadata_enricher.py` | 元数据增强 | Title/Summary/Tags + category/language |
-| `image_captioner.py` | 图片描述 | Vision LLM |
 | `dense_encoder.py` | 稠密编码 | 通过 libs.embedding，批处理 |
 | `sparse_encoder.py` | 稀疏编码 | BM25 |
 | `vector_upserter.py` | pgvector Upsert | 幂等，vector 数据类型写入 |
@@ -1102,7 +1347,6 @@ knowledge-service/
 | 抽象接口 | 默认实现 | 可替换 |
 |---------|---------|--------|
 | `BaseLLM` | Azure OpenAI | OpenAI / Ollama / DeepSeek |
-| `BaseVisionLLM` | Azure Vision | OpenAI Vision |
 | `BaseEmbedding` | OpenAI | BGE / Ollama |
 | `BaseSplitter` | 文件类型路由 | MarkdownHeader / HTMLHeader / Recursive |
 | `BaseVectorStore` | pgvector | Qdrant / Pinecone |
@@ -1115,6 +1359,7 @@ knowledge-service/
 | 模块 | 职责 | 关键点 |
 |------|------|--------|
 | `api/client.ts` | Axios 封装 | base URL、错误拦截 |
+| `api/config.ts` | 系统配置 API | 读取 LLM/Embedding/Reranker 等组件配置 |
 | `pages/Overview.tsx` | 系统总览 | ConfigCard x6、StatsTable |
 | `pages/DocumentCenter.tsx` | 文档中心 | DocLibraryTable（筛选/批量/状态）、UploadArea、CollectionManager |
 | `pages/AIAssistant.tsx` | AI 知识助手 | ChatPanel（对话消息）、ConvSidebar（对话列表）、SettingsBar（检索模式切换 + 重排序开关） |
@@ -1123,8 +1368,13 @@ knowledge-service/
 | `pages/IngestionTraces.tsx` | 摄取追踪 | WaterfallChart、StageAccordion |
 | `pages/QueryTraces.tsx` | Query 追踪 | MetricsPanel（p50/p95/令牌/缓存/拒绝/符合率）、DenseSparseCompare、RerankComparison |
 | `pages/EvaluationPanel.tsx` | 评估面板 | MetricCard、HistoryChart |
-| `components/Layout.tsx` | 主布局 | Ant Design Layout (Sider + Content) |
-| `components/Sidebar.tsx` | 侧边栏 | Ant Design Menu，8 导航项 |
+| `components/AppLayout.tsx` | 主布局 | Ant Design Layout (Sider + Content + Menu)，8 导航项 |
+| `components/HistoryChart.tsx` | 历史趋势图 | Recharts 封装，支持多指标叠加 |
+| `components/MetricsCard.tsx` | 指标卡片 | 单值/趋势/目标对比展示 |
+| `components/ConfigCard.tsx` | 系统配置卡片 | 展示 LLM/Embedding/Reranker 等组件配置状态 |
+| `components/WaterfallChart.tsx` | 瀑布图组件 | 展示 Ingestion/Query 各阶段耗时 |
+| `components/DenseSparseCompare.tsx` | 检索对比组件 | Dense/Sparse 检索结果对比展示 |
+| `components/RerankComparison.tsx` | 重排序对比组件 | Rerank 前后排序变化展示 |
 | `components/ChatMessage.tsx` | 聊天气泡 | 用户/AI 消息、Markdown 渲染、引用展开 |
 | `components/CitationCard.tsx` | 引用卡片 | 来源文件、Chunk 片段、相关性分 |
 
@@ -1185,7 +1435,7 @@ sequenceDiagram
     end
     QE->>QE: RRF Fusion (合并排序)
     QE->>QE: Rerank (可选 CrossEncoder / LLM)
-    QE->>QE: ResponseBuilder (引用生成 + 多模态组装)
+    QE->>QE: ResponseBuilder (引用生成)
     QE-->>MCP: { results, citations, trace_id }
     MCP-->>Client: CallToolResult (Text + Image)
 ```
@@ -1249,6 +1499,16 @@ vector_store:
   table_name: document_chunks
   embedding_dimensions: 1536
 
+# ===== 稀疏检索配置 =====
+sparse_search:
+  backend: pg_bm25              # pg_bm25 | elasticsearch
+  host: localhost
+  port: 5432
+  user: postgres
+  password: root123456
+  database: knowledge_rag
+
+
 # ===== LLM 配置 =====
 llm:
   provider: azure                # azure | openai | ollama | deepseek
@@ -1278,7 +1538,7 @@ splitter:
 
 # ===== 检索配置 =====
 retrieval:
-  sparse_backend: bm25           # bm25 | elasticsearch
+  sparse_backend: pg_bm25        # pg_bm25 | elasticsearch
   fusion_algorithm: rrf          # rrf | weighted_sum
   rerank_backend: cross_encoder  # none | cross_encoder | llm
 
@@ -1292,13 +1552,11 @@ observability:
   logging:
     log_file: logs/service.jsonl
     log_level: INFO
-    service_name: qa_service      # 服务标识
+    service_name: knowledge_service      # 服务标识
 
 # ===== 服务配置 =====
 server:
-  host: 0.0.0.0
   port: 8000
-  cors_origins: ["http://localhost:5173"]
   max_file_size: 52428800              # 文件上传大小上限（50MB，单位字节）
   allowed_extensions: ["pdf", "md", "html"]  # 允许上传的文件类型
 ```
@@ -1334,7 +1592,7 @@ server:
 6. **阶段 F：Trace 基础设施与打点**
    - 目的：实现 structlog 结构化日志（JSON 格式 + 固定字段 + logrotate），在 Ingestion + Query 双链路打点，添加 Pipeline 进度回调。
 7. **阶段 G：前端 Dashboard（React 可视化管理平台）**
-   - 目的：搭建 React 六页面管理平台（系统总览 / 数据浏览 / Ingestion 管理 / Ingestion 追踪 / Query 追踪 / 评估面板），实现完整的可视化管理体验。
+   - 目的：搭建 React 8 页面管理平台（系统总览 / 数据浏览 / 文档中心 / AI 知识助手 / Ingestion 管理 / Ingestion 追踪 / Query 追踪 / 评估面板），实现完整的可视化管理体验。
 8. **阶段 H：评估体系**
    - 目的：实现 RagasEvaluator + CompositeEvaluator + EvalRunner，启用评估面板页面，建立 golden test set 回归基线。
 9. **阶段 I：端到端验收与文档收口**
@@ -1352,10 +1610,16 @@ server:
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| A1 | 初始化目录树与最小可运行入口 | [ ] | | |
-| A2 | 引入 pytest 并建立测试目录约定 | [ ] | | |
-| A3 | 配置加载与校验（Settings + 数据库连接配置） | [ ] | | |
-| A4 | PostgreSQL + pgvector + pg_bm25 + pg_search 数据库初始化 | [ ] | | init_knowledge_db.sql + init_knowledge_rag_db.sql，需根据安装的 ParadeDB 版本验证 create_bm25 API 语法 |
+| A1 | 初始化目录树与最小可运行入口 | ✅ | 2026-06-14 | 启动方式：后端 `cd backend && uv run uvicorn app.main:app --reload --port 8000`；前端 `cd frontend && pnpm dev` |
+| A2 | 引入 pytest 并建立测试目录约定 | ✅ | 2026-06-14 | conftest.py (client + sample_settings fixture), test_health.py (2 tests), pytest markers (unit/integration/e2e/llm) | |
+| A3 | 配置加载与校验（Settings + 数据库连接配置） | ✅ | 2026-06-14 | settings.py (pydantic validators/env_nested_delimiter), test_settings.py (30 tests) | |
+| A4 | PostgreSQL + pgvector + tsvector/GIN 数据库初始化 | ✅ | 2026-06-14 | init_knowledge_db.sql + init_knowledge_rag_db.sql；BM25 评分在应用层实现（T11 pg_bm25 迁移待后续） |
+| A5 | 前端项目初始化（Vite + React 19 + TypeScript + Ant Design 5 + React Router） | ✅ | 2026-06-14 | 前端骨架，设计规范遵循 UI-UX-Pro-Max skill 指导原则 |
+| A6 | API Client 层构建（Axios + TypeScript 类型定义 + 错误拦截器） | ✅ | 2026-06-14 |
+| A7 | 前端 Layout + Router 框架（Ant Design Layout + 8 路由配置） | ✅ | 2026-06-14 |
+| A8 | 全局状态管理 + 主题配置 | ✅ | 2026-06-14 | 主题 via ConfigProvider，全局状态使用 React useState/useEffect 各页独立管理 |
+| A9 | 通用组件库搭建（recharts 图表等第三方依赖引入） | ✅ | 2026-06-14 | HistoryChart, MetricsCard, useWebSocket hook |
+| A10 | 前端项目构建配置验证（Vite + ESLint + Prettier 配置） | ✅ | 2026-06-14 | eslint.config.js, tsconfig.app.json, tsconfig.node.json |
 
 #### 阶段 B：Libs 可插拔层
 
@@ -1447,14 +1711,12 @@ server:
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| G1 | 前端项目初始化（Vite + React + TS + Router + Layout） | [ ] | | |
-| G2 | API Client 层 + TypeScript 类型定义 | [ ] | | |
-| G3 | Overview + Data Browser 页面（含 category/language 筛选） | [ ] | | |
-| G4 | Ingestion Manager + Ingestion Traces 页面 | [ ] | | |
-| G5 | Query Traces + Evaluation Panel 页面 | [ ] | | |
-| G6 | 图表组件（WaterfallChart / HistoryChart）+ WebSocket 集成 | [ ] | | |
-| G7 | 文档中心页面（文档库管理 + 文件上传 + 批量操作 + 集合管理） | [ ] | | |
-| G8 | AI 知识助手页面（对话式问答 + 检索模式切换 + 重排序开关 + 引用溯源 + 对话历史管理） | [ ] | | |
+| G1 | Overview + Data Browser 页面（含 category/language 筛选） | [ ] | | |
+| G2 | Ingestion Manager + Ingestion Traces 页面 | [ ] | | |
+| G3 | Query Traces + Evaluation Panel 页面 | [ ] | | |
+| G4 | 图表组件（WaterfallChart / HistoryChart）+ WebSocket 集成 | [ ] | | |
+| G5 | 文档中心页面（文档库管理 + 文件上传 + 批量操作 + 集合管理） | [ ] | | |
+| G6 | AI 知识助手页面（对话式问答 + 检索模式切换 + 重排序开关 + 引用溯源 + 对话历史管理） | [ ] | | |
 
 #### 阶段 H：评估体系
 
@@ -1482,16 +1744,18 @@ server:
 
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
-| 阶段 A | 4 | 0 | 0% |
+| 阶段 A | 10 | 10 | 100% |
 | 阶段 B | 16 | 0 | 0% |
 | 阶段 C | 14 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 15 | 0 | 0% |
 | 阶段 F | 6 | 0 | 0% |
-| 阶段 G | 8 | 0 | 0% |
+| 阶段 G | 6 | 0 | 0% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **81** | **0** | **0%** |
+| **总计** | **84** | **10** | **12%** |
+| **有效数** | **81** | **10** | **12%** | 3 项延期不计入有效任务 |
+| **延期** | **3** | **—** | **—** | B8 / B9 / C7（Vision 多模态等，待条件成熟后实现） |
 
 
 ---
@@ -1521,3 +1785,4 @@ server:
 | T10 | RBAC 权限控制 | 低 | 多用户 + 文档级权限 |
 | T11 | pg_bm25 索引重建窗口 | 中 | 大量写入后定期重建 BM25 索引，保持检索性能；可选 APScheduler 定时任务 |
 | T12 | 配置分离（多环境） | 低 | settings.yaml + settings.local.yaml 分层配置，本地敏感信息不提交到仓库 |
+| T13 | LLM/Embedding 调用 Circuit Breaker | 中 | LLM/Embedding 外部 API 调用添加熔断机制（一期暂不实现） |

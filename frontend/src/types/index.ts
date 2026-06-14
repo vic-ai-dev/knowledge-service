@@ -1,0 +1,202 @@
+/* ============================================================================
+ * Knowledge Service — TypeScript 类型定义
+ * ============================================================================ */
+
+// ── 文档类型 ──────────────────────────────────────────────
+
+export type DocType = 'pdf' | 'md' | 'html';
+export type Category = 'employee_handbook' | 'compliance' | 'technical_spec' | 'architecture';
+export type Language = 'zh' | 'en';
+export type SearchMode = 'vector_only' | 'hybrid';
+export type IngestionStatus = 'success' | 'failed' | 'processing';
+
+export interface DocumentInfo {
+  id: string;
+  source_path: string;
+  title?: string;
+  collection: string;
+  category: Category;
+  language: Language;
+  doc_type: DocType;
+  file_size?: number;
+  chunk_count: number;
+  ingested_at?: string;
+  updated_at?: string;
+  is_deleted: boolean;
+}
+
+export interface ChunkRecord {
+  id: string;
+  doc_id: string;
+  chunk_index: number;
+  text: string;
+  metadata: Record<string, unknown>;
+  source_path: string;
+  token_count: number;
+  embedding?: number[];
+  created_at: string;
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  description?: string;
+  document_count: number;
+  chunk_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── 摄取 ──────────────────────────────────────────────────
+
+export interface UploadResult {
+  file_path: string;
+  file_hash: string;
+  doc_type: DocType;
+  category: Category;
+}
+
+export interface IngestionRunResult {
+  run_id: string;
+  status: IngestionStatus;
+  total_chunks?: number;
+  total_images?: number;
+  error?: string;
+}
+
+export interface IngestionTrace {
+  trace_id: string;
+  source_path: string;
+  collection: string;
+  total_latency_ms: number;
+  status: IngestionStatus;
+  total_chunks: number;
+  total_images: number;
+  stages?: Record<string, unknown>;
+  error?: string;
+  created_at: string;
+}
+
+// ── 查询 ──────────────────────────────────────────────────
+
+export interface QueryRequest {
+  query: string;
+  search_mode: SearchMode;
+  rerank: boolean;
+}
+
+export interface RetrievalResult {
+  chunk_id: string;
+  text: string;
+  metadata: Record<string, unknown>;
+  score: number;
+  source_path?: string;
+}
+
+export interface QueryResult {
+  query: string;
+  results: RetrievalResult[];
+  trace_id: string;
+  total_latency_ms: number;
+  answer: string;
+  citations: Array<{ chunk_id: string; text: string; source: string }>;
+}
+
+export interface QueryTrace {
+  trace_id: string;
+  user_query: string;
+  collection: string;
+  category?: Category;
+  language?: Language;
+  total_latency_ms: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cache_hit: boolean;
+  rejected: boolean;
+  rejection_reason?: string;
+  compliance_score?: number;
+  stages?: Record<string, unknown>;
+  top_k_results?: RetrievalResult[];
+  error?: string;
+  created_at: string;
+}
+
+export interface QueryMetrics {
+  p50_latency: number;
+  p95_latency: number;
+  total_requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_hit_rate: number;
+  rejection_rate: number;
+  avg_compliance_score: number;
+  period: string;
+}
+
+// ── 评估 ──────────────────────────────────────────────────
+
+export interface EvalResult {
+  id: string;
+  metrics: Record<string, number>;
+  test_set: string;
+  backends_used: string[];
+  created_at: string;
+}
+
+export interface EvalRunRequest {
+  test_set?: string;
+  backends?: string[];
+}
+
+// ── AI 助手 ───────────────────────────────────────────────
+
+export interface AssistantQueryRequest {
+  query: string;
+  search_mode: SearchMode;
+  rerank: boolean;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  model: string;
+  collection: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  citations?: Array<{ chunk_id: string; text: string; source: string }>;
+  token_count?: number;
+  timestamp: string;
+}
+
+export interface ConversationDetail extends Conversation {
+  messages: Message[];
+}
+
+// ── 系统 ──────────────────────────────────────────────────
+
+export interface HealthResponse {
+  status: string;
+  service: string;
+  version: string;
+}
+
+export interface SystemConfig {
+  llm: { provider: string; model: string };
+  embedding: { provider: string; model: string };
+  retrieval: { sparse_backend: string; rerank_backend: string };
+}
+
+export interface SystemStats {
+  total_documents: number;
+  total_chunks: number;
+  total_collections: number;
+  by_category: Record<string, number>;
+  by_language: Record<string, number>;
+}

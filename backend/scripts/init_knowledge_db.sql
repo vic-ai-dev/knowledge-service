@@ -131,12 +131,6 @@ COMMENT ON COLUMN query_traces.rejected IS '查询是否被拒绝（限流 / 内
 COMMENT ON COLUMN query_traces.rejection_reason IS '拒绝原因';
 COMMENT ON COLUMN query_traces.compliance_score IS '答案符合率 0-1，基于 LLM-as-Judge 或规则判定';
 
-CREATE INDEX idx_query_traces_created ON query_traces(created_at DESC);
-CREATE INDEX idx_query_traces_query ON query_traces USING gin(to_tsvector('simple', user_query));
-
-COMMENT ON TABLE query_traces IS 'Query 追踪记录，stage 为 JSONB 存储各阶段详情';
-
-
 -- 6. 评估结果表
 CREATE TABLE IF NOT EXISTS evaluation_results (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -190,6 +184,10 @@ CREATE INDEX idx_conversations_collection ON conversations(collection);
 
 COMMENT ON TABLE conversations IS 'AI 知识助手对话记录';
 
+COMMENT ON COLUMN conversations.messages IS 'JSONB 数组：[{"role":"user"/"assistant", "content":"...", "citations":[...], "token_count":N, "timestamp":"..."}]';
+COMMENT ON COLUMN conversations.model IS '使用的 LLM 模型（如 gpt-4o-mini），从 settings.yaml 读取默认值';
+COMMENT ON COLUMN conversations.collection IS '对话上下文所属集合';
+COMMENT ON COLUMN conversations.category IS '对话上下文所属分类（过滤条件）';
 
 -- 9. 查询结果缓存表（性能优化：P90 < 10s）
 CREATE TABLE IF NOT EXISTS query_cache (
@@ -203,7 +201,5 @@ CREATE TABLE IF NOT EXISTS query_cache (
     expires_at  TIMESTAMPTZ DEFAULT NOW() + INTERVAL '1 hour'
 );
 
-CREATE INDEX idx_query_cache_expires ON query_cache(expires_at);COMMENT ON COLUMN conversations.messages IS 'JSONB 数组：[{"role":"user"/"assistant", "content":"...", "citations":[...], "token_count":N, "timestamp":"..."}]';
-COMMENT ON COLUMN conversations.model IS '使用的 LLM 模型（如 gpt-4o-mini），为空时仅返回检索结果';
-COMMENT ON COLUMN conversations.collection IS '对话上下文所属集合';
-COMMENT ON COLUMN conversations.category IS '对话上下文所属分类（过滤条件）';
+CREATE INDEX idx_query_cache_expires ON query_cache(expires_at);
+
