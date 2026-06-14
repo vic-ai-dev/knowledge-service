@@ -66,13 +66,36 @@ class VectorStoreConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    provider: Literal["azure", "openai", "ollama", "deepseek"] = "azure"
+    provider: Literal["azure", "openai", "ollama", "deepseek"] = "openai"
     model: str = "gpt-4o"
+    api_key: str | None = None
+    base_url: str | None = None
+    temperature: float = 0.0
+    max_tokens: int = 4096
+
+    @field_validator("temperature")
+    @classmethod
+    def check_temperature(cls, v: float) -> float:
+        if not 0.0 <= v <= 2.0:
+            raise ValueError(f"temperature 必须在 0–2 范围内，得到 {v}")
+        return v
 
 
 class EmbeddingConfig(BaseModel):
     provider: Literal["openai", "azure", "ollama"] = "openai"
     model: str = "text-embedding-3-small"
+    dimensions: int = 1536
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class RerankConfig(BaseModel):
+    provider: Literal["ollama", "openai", "azure"] = "ollama"
+    model: str = "dengcao/Qwen3-Reranker-0.6B:Q8_0"
+    enabled: bool = True
+    top_k: int = 5
+    api_key: str | None = None
+    base_url: str | None = None
 
 
 class SplitterStrategy(BaseModel):
@@ -119,7 +142,7 @@ class RetrievalConfig(BaseModel):
 
 
 class SparseSearchConfig(BaseModel):
-    backend: str = "pg_bm25"  # pg_bm25 | elasticsearch
+    backend: str = "pg_bm25"
     host: str = "localhost"
     port: int = 5432
     user: str = "postgres"
@@ -170,6 +193,7 @@ class Settings(BaseSettings):
     vector_store: VectorStoreConfig = VectorStoreConfig()
     llm: LLMConfig = LLMConfig()
     embedding: EmbeddingConfig = EmbeddingConfig()
+    rerank: RerankConfig = RerankConfig()
     splitter: SplitterConfig = SplitterConfig()
     retrieval: RetrievalConfig = RetrievalConfig()
     sparse_search: SparseSearchConfig = SparseSearchConfig()
@@ -207,6 +231,7 @@ class Settings(BaseSettings):
             "vector_store": "vector_store",
             "llm": "llm",
             "embedding": "embedding",
+            "rerank": "rerank",
             "splitter": "splitter",
             "retrieval": "retrieval",
             "sparse_search": "sparse_search",

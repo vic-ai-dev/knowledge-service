@@ -1625,14 +1625,15 @@ server:
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| B1 | LLM 抽象接口与工厂 | [ ] | | |
+| B1 | LLM 抽象接口与工厂 | ✅ | 2026-06-14 | 
 | B2 | Embedding 抽象接口与工厂 | [ ] | | |
 | B3 | Splitter 抽象接口与工厂 | [ ] | | |
 | B4 | VectorStore 抽象接口与工厂（pgvector 契约） | [ ] | | |
 | B5 | Reranker 抽象接口与工厂（含 None 回退） | [ ] | | |
 | B6 | Evaluator 抽象接口与工厂 | [ ] | | |
-| B7.1 | OpenAI-Compatible LLM（OpenAI/Azure/DeepSeek） | [ ] | | |
-| B7.2 | Ollama LLM（本地后端） | [ ] | | |
+| B7.1 | OpenAI-Compatible LLM（OpenAI/Azure） | ✅ | 2026-06-14 | 
+| B7.11 | DeepSeek LLM（专用实现，支持 usage 扩展 + reasoning_content） | ✅ | 2026-06-14 | 
+| B7.2 | Ollama LLM（本地后端） | ✅ | 2026-06-14 | 
 | B7.3 | OpenAI & Azure Embedding 实现 | [ ] | | |
 | B7.4 | Ollama Embedding 实现 | [ ] | | |
 | B7.5 | MarkdownHeaderTextSplitter 实现 | [ ] | | |
@@ -1711,12 +1712,12 @@ server:
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| G1 | Overview + Data Browser 页面（含 category/language 筛选） | [ ] | | |
-| G2 | Ingestion Manager + Ingestion Traces 页面 | [ ] | | |
-| G3 | Query Traces + Evaluation Panel 页面 | [ ] | | |
-| G4 | 图表组件（WaterfallChart / HistoryChart）+ WebSocket 集成 | [ ] | | |
-| G5 | 文档中心页面（文档库管理 + 文件上传 + 批量操作 + 集合管理） | [ ] | | |
-| G6 | AI 知识助手页面（对话式问答 + 检索模式切换 + 重排序开关 + 引用溯源 + 对话历史管理） | [ ] | | |
+| G1 | Overview + Data Browser 页面（含 category/language 筛选） | ✅ | 2026-06-14 | |
+| G2 | Ingestion Manager + Ingestion Traces 页面 | ✅ | 2026-06-14 | |
+| G3 | Query Traces + Evaluation Panel 页面 | ✅ | 2026-06-14 | |
+| G4 | 图表组件（WaterfallChart / HistoryChart）+ WebSocket 集成 | ✅ | 2026-06-14 | |
+| G5 | 文档中心页面（文档库管理 + 文件上传 + 批量操作 + 集合管理） | ✅ | 2026-06-14 | |
+| G6 | AI 知识助手页面（对话式问答 + 检索模式切换 + 重排序开关 + 引用溯源 + 对话历史管理） | ✅ | 2026-06-14 | |
 
 #### 阶段 H：评估体系
 
@@ -1745,16 +1746,16 @@ server:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 10 | 10 | 100% |
-| 阶段 B | 16 | 0 | 0% |
+| 阶段 B | 16 | 3 | 19% |
 | 阶段 C | 14 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 15 | 0 | 0% |
 | 阶段 F | 6 | 0 | 0% |
-| 阶段 G | 6 | 0 | 0% |
+| 阶段 G | 6 | 6 | 100% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **84** | **10** | **12%** |
-| **有效数** | **81** | **10** | **12%** | 3 项延期不计入有效任务 |
+| **总计** | **84** | **19** | **23%** |
+| **有效数** | **81** | **19** | **23%** | 3 项延期不计入有效任务 |
 | **延期** | **3** | **—** | **—** | B8 / B9 / C7（Vision 多模态等，待条件成熟后实现） |
 
 

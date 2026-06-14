@@ -46,7 +46,7 @@ class TestDefaults:
     def test_default_llm_config(self, sample_settings):
         """LLM 默认配置。"""
         llm = sample_settings.llm
-        assert llm.provider == "azure"
+        assert llm.provider == "openai"
         assert llm.model == "gpt-4o"
 
     def test_default_splitter_config(self, sample_settings):
@@ -173,7 +173,7 @@ class TestYamlLoading:
             assert settings.database.host == "test-db"
             assert settings.database.port == 6432
             # 未覆盖的字段保持默认值
-            assert settings.llm.provider == "azure"
+            assert settings.llm.provider == "openai"
             assert settings.vector_store.embedding_dimensions == 1536
         finally:
             os.unlink(tmp_path)

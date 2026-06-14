@@ -1,15 +1,19 @@
-"""工厂层 — 配置驱动的可插拔抽象工厂。
-
-用法：
-    llm = LLMFactory.create(settings.llm.provider, settings.llm.model)
-    embed = EmbeddingFactory.create(settings.embedding.provider, settings.embedding.model)
-"""
+"""工厂层 — 配置驱动的可插拔抽象工厂。"""
 
 from __future__ import annotations
 
 from typing import Any
 
 from app.core.settings import Settings, get_settings
+
+
+def _config_kwargs(
+    cfg: Any,
+    exclude: tuple[str, ...] = ("provider", "model"),
+) -> dict[str, Any]:
+    """从配置模型中提取 exclude 之外的所有字段作为 kwargs。"""
+    return cfg.model_dump(exclude=set(exclude))
+
 
 # ── LLM ─────────────────────────────────────────────────
 from app.libs.base.base_llm import BaseLLM
@@ -29,10 +33,11 @@ class LLMFactory:
         settings = get_settings()
         provider = provider or settings.llm.provider
         model = model or settings.llm.model
+        merged = {**_config_kwargs(settings.llm), **kwargs}
         impl_cls = cls._registry.get(provider)
         if impl_cls is None:
             raise ValueError(f"Unknown LLM provider: {provider}. Available: {list(cls._registry.keys())}")
-        return impl_cls(model=model, **kwargs)
+        return impl_cls(model=model, **merged)
 
 
 # ── Embedding ───────────────────────────────────────────
@@ -53,10 +58,11 @@ class EmbeddingFactory:
         settings = get_settings()
         provider = provider or settings.embedding.provider
         model = model or settings.embedding.model
+        merged = {**_config_kwargs(settings.embedding), **kwargs}
         impl_cls = cls._registry.get(provider)
         if impl_cls is None:
             raise ValueError(f"Unknown Embedding provider: {provider}. Available: {list(cls._registry.keys())}")
-        return impl_cls(model=model, **kwargs)
+        return impl_cls(model=model, **merged)
 
 
 # ── Splitter ────────────────────────────────────────────
@@ -136,10 +142,11 @@ class RerankerFactory:
         if backend == "none":
             from app.libs.base.base_reranker import NoOpReranker
             return NoOpReranker()
+        merged = {**_config_kwargs(settings.rerank), **kwargs}
         impl_cls = cls._registry.get(backend)
         if impl_cls is None:
             raise ValueError(f"Unknown Reranker backend: {backend}. Available: {list(cls._registry.keys())}")
-        return impl_cls(**kwargs)
+        return impl_cls(**merged)
 
 
 # ── Evaluator ───────────────────────────────────────────

@@ -7,6 +7,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
+# 导入 libs 包以触发所有工厂注册（LLM, Embedding, Splitter 等）
+import app.libs  # noqa: F401
+
 from app.core.settings import get_settings
 
 
@@ -14,7 +17,7 @@ from app.core.settings import get_settings
 async def lifespan(app: FastAPI):
     """应用生命周期管理。"""
     settings = get_settings()
-    # TODO(A3): 初始化数据库连接池
+    # TODO(B4): 初始化数据库连接池
     # TODO(F4): request_id 中间件
     yield
     # TODO: 清理资源
