@@ -114,6 +114,7 @@ export interface QueryResult {
   total_latency_ms: number;
   answer: string;
   citations: Array<{ chunk_id: string; text: string; source: string }>;
+  session_id: string;
 }
 
 export interface QueryTrace {
@@ -168,6 +169,7 @@ export interface AssistantQueryRequest {
   query: string;
   search_mode: SearchMode;
   rerank: boolean;
+  session_id?: string;
 }
 
 export interface Conversation {

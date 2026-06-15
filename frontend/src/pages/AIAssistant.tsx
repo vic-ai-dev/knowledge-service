@@ -35,7 +35,8 @@ export default function AIAssistant() {
     try {
       const result = await getConversationHistory({ page: 1, page_size: 50 });
       setConversations(result.items);
-      if (result.items.length > 0 && !activeConv) {
+      // 只在首次加载且无活跃会话时自动选中第一条
+      if (initialLoad && result.items.length > 0 && !activeConv) {
         setActiveConv(result.items[0].id);
       }
     } catch (err: any) {
@@ -44,7 +45,7 @@ export default function AIAssistant() {
       setConvLoading(false);
       setInitialLoad(false);
     }
-  }, []);
+  }, [initialLoad, activeConv]);
 
   // 加载指定对话的详情
   const fetchConversationDetail = useCallback(async (sessionId: string) => {
@@ -87,6 +88,7 @@ export default function AIAssistant() {
         query: queryText,
         search_mode: searchMode,
         rerank: rerankEnabled,
+        session_id: activeConv || undefined,
       });
 
       const assistantMsg: Message = {
@@ -102,6 +104,13 @@ export default function AIAssistant() {
           : undefined,
       };
       setMessages(prev => [...prev, assistantMsg]);
+      // 更新会话 ID（新对话时）并刷新列表
+      if (result.session_id) {
+        if (!activeConv) {
+          setActiveConv(result.session_id);
+        }
+        fetchConversations();
+      }
     } catch (err: any) {
       message.error('请求失败: ' + (err.message || '未知错误'));
       setMessages(prev => [...prev, {
@@ -123,7 +132,7 @@ export default function AIAssistant() {
     try {
       await deleteConversation(convId);
       message.success('对话已删除');
-      setConversations(prev => prev.filter(c => c.id !== convId));
+      fetchConversations();
       if (activeConv === convId) {
         const remaining = conversations.filter(c => c.id !== convId);
         setActiveConv(remaining.length > 0 ? remaining[0].id : '');

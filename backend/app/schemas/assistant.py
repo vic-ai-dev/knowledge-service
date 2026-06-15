@@ -10,6 +10,7 @@ class AskRequest(BaseModel):
     query: str
     search_mode: str = "hybrid"
     rerank: bool = True
+    session_id: str | None = None
 
 
 __all__ = [
