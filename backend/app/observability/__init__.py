@@ -13,7 +13,7 @@ from typing import Any
 
 import structlog
 
-from app.observability.processors import (
+from app.observability.structlog_processors import (
     add_service_name,
     add_trace_context,
     auto_exc_info,
