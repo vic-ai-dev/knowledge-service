@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 from typing import Any
 
 import asyncpg
@@ -175,7 +176,7 @@ class BM25Indexer:
                 chunk_id=str(r["id"]),
                 text=r["text"],
                 score=float(r["score"]),
-                metadata=dict(r["metadata"]) if r.get("metadata") else {},
+                metadata=self._parse_metadata(r.get("metadata")),
                 source_path=r.get("source_path"),
                 doc_id=str(r["doc_id"]) if r.get("doc_id") else None,
                 collection=r.get("collection", "default"),
@@ -185,6 +186,23 @@ class BM25Indexer:
             )
             for r in rows
         ]
+
+    # ── 工具方法 ──
+
+    @staticmethod
+    def _parse_metadata(raw: Any) -> dict:
+        """将 asyncpg 返回的 JSONB 值安全转换为 dict。"""
+        if raw is None:
+            return {}
+        if isinstance(raw, dict):
+            return dict(raw)  # shallow copy
+        if isinstance(raw, str):
+            try:
+                parsed = json.loads(raw)
+                return parsed if isinstance(parsed, dict) else {}
+            except (json.JSONDecodeError, TypeError):
+                return {}
+        return {}
 
     # ── 删除方法 ──
 

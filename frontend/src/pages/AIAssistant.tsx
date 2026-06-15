@@ -209,7 +209,7 @@ export default function AIAssistant() {
                 value={searchMode}
                 onChange={setSearchMode}
                 options={[
-                  { value: 'vector', label: '仅向量检索' },
+                  { value: 'vector_only', label: '仅向量检索' },
                   { value: 'hybrid', label: '混合检索' },
                 ]}
               />

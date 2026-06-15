@@ -86,6 +86,23 @@ class PGVectorStore(BaseVectorStore):
         """将 float list 转为 pgvector 文本表示。"""
         return "[" + ",".join(str(x) for x in embedding) + "]"
 
+    # ── Metadata 安全解析 ──────────────────────────────────────
+
+    @staticmethod
+    def _parse_metadata(raw: Any) -> dict:
+        """将 asyncpg 返回的 JSONB 值安全转换为 dict。"""
+        if raw is None:
+            return {}
+        if isinstance(raw, dict):
+            return dict(raw)  # shallow copy
+        if isinstance(raw, str):
+            try:
+                parsed = json.loads(raw)
+                return parsed if isinstance(parsed, dict) else {}
+            except (json.JSONDecodeError, TypeError):
+                return {}
+        return {}
+
     # ── 输入校验 ──
 
     def _validate_embedding(self, embedding: list[float]) -> None:
@@ -194,17 +211,38 @@ class PGVectorStore(BaseVectorStore):
             raise VectorStoreError(
                 f"Vector query failed: {e}"
             ) from e
+        except Exception as e:
+            raise VectorStoreError(
+                f"Vector store query failed: {e}"
+            ) from e
 
-        return [
-            VectorSearchResult(
-                chunk_id=str(r["id"]),
-                text=r["text"],
-                metadata=dict(r["metadata"]) if r.get("metadata") else {},
-                score=float(r["score"]),
-                source_path=r.get("source_path"),
-            )
-            for r in rows
-        ]
+        logger.debug("query_result_rows", message=f"Got {len(rows)} rows from vector query")
+
+        # Debug: log first row's metadata type
+        if rows:
+            r0 = rows[0]
+            meta = r0.get("metadata")
+            logger.debug("query_metadata_debug",
+                         message=f"First row metadata type={type(meta).__name__}, value={repr(meta)[:200]}",
+                         metadata={"type": type(meta).__name__})
+
+        try:
+            results = [
+                VectorSearchResult(
+                    chunk_id=str(r["id"]),
+                    text=r["text"],
+                    metadata=self._parse_metadata(r.get("metadata")),
+                    score=float(r["score"]),
+                    source_path=r.get("source_path"),
+                )
+                for r in rows
+            ]
+        except (TypeError, ValueError) as e:
+            raise VectorStoreError(
+                f"Result parsing failed: {e}"
+            ) from e
+
+        return results
 
     @trace_span(span_name="delete")
     async def delete(self, chunk_ids: list[str]) -> int:

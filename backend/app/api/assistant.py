@@ -1,7 +1,12 @@
-"""E13 — AI 知识助手 API（问答查询 + 对话历史 CRUD + 对话管理）。"""
+"""E13 — AI 知识助手 API（问答查询 + 对话历史 CRUD + 对话管理）。
+
+此端点使用检索管线 + LLM 生成回答。
+"""
 
 from __future__ import annotations
 
+import uuid
+import time
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,37 +17,107 @@ from app.schemas.conversation import (
     ConversationListResponse,
     MessageCreate,
 )
+from app.schemas.assistant import AskRequest
 from app.models.conversation import Conversation
 from app.common.log import get_logger
+
+from app.core.query_engine.query_processor import QueryProcessor
+from app.core.query_engine.hybrid_search import HybridSearch
+from app.libs.factory import LLMFactory
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 
 @router.post("/ask")
-async def ask(
-    query: str,
-    search_mode: str = Query("hybrid"),
-    collection: str | None = None,
-    session_id: str | None = None,
-):
+async def ask(body: AskRequest):
     """AI 知识助手问答。
 
-    使用 LLM 对检索结果进行总结回答。
+    执行检索 → 用 LLM 对检索结果进行总结回答。
     """
-    # TODO(E13): 连接 LLM + QueryPipeline
+    t0 = time.monotonic()
     logger.info(
         "api_ask",
         message="AI 助手问答请求",
-        metadata={"query": query, "search_mode": search_mode, "session_id": session_id},
+        metadata={"query": body.query, "search_mode": body.search_mode, "rerank": body.rerank},
     )
-    return {
-        "answer": "",
-        "citations": [],
-        "session_id": session_id or "",
-        "trace_id": "",
-        "latency_ms": 0.0,
-    }
+
+    try:
+        # 1. 构建检索查询
+        processor = QueryProcessor()
+        rq = processor.process(
+            query_text=body.query,
+            search_mode=body.search_mode,
+            top_k=10,
+            rerank=body.rerank,
+        )
+
+        # 2. 执行检索
+        searcher = HybridSearch()
+        search_result = await searcher.search(rq)
+
+        # 3. 准备上下文
+        context_parts = []
+        citations = []
+        for r in search_result.results[:5]:
+            context_parts.append(
+                f"[来源: {r.source_path or 'unknown'}]\n{r.text}"
+            )
+            citations.append({
+                "chunk_id": r.chunk_id,
+                "text": r.text[:200],
+                "source": r.source_path or "unknown",
+            })
+
+        context = "\n\n---\n\n".join(context_parts)
+
+        # 4. 调用 LLM 生成回答
+        system_prompt = (
+            "你是一个企业知识助手。请根据提供的检索结果回答用户问题。"
+            "如果检索结果不足以回答问题，请如实告知。"
+            "请引用来源（使用 [来源: filename] 格式）。\n\n"
+            "检索结果：\n"
+            f"{context}"
+        )
+
+        llm = LLMFactory.create()
+        llm_response = await llm.generate(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": body.query},
+            ],
+        )
+
+        total_latency_ms = round((time.monotonic() - t0) * 1000, 2)
+
+        logger.info(
+            "api_ask_done",
+            message="AI 助手回答完成",
+            metadata={
+                "query": body.query,
+                "latency_ms": total_latency_ms,
+                "citations": len(citations),
+                "llm_model": llm_response.model,
+            },
+        )
+
+        return {
+            "query": body.query,
+            "results": [r.__dict__ for r in search_result.results],
+            "trace_id": search_result.trace_id,
+            "total_latency_ms": total_latency_ms,
+            "answer": llm_response.content,
+            "citations": citations,
+        }
+
+    except Exception as e:
+        total_latency_ms = round((time.monotonic() - t0) * 1000, 2)
+        logger.error(
+            "api_ask_error",
+            error=str(e),
+            metadata={"query": body.query, "latency_ms": total_latency_ms},
+        )
+        raise HTTPException(status_code=500, detail=f"问答生成失败: {str(e)}")
 
 
 @router.get("/sessions")
@@ -73,8 +148,12 @@ async def get_session(
     kb_session: AsyncSession = Depends(get_kb_session),
 ):
     """获取指定会话的对话历史。"""
+    try:
+        parsed = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的 session_id 格式")
     repo = ConversationRepository(kb_session)
-    conv = await repo.find_by_id(session_id)
+    conv = await repo.find_by_id(parsed)
     if not conv:
         raise HTTPException(status_code=404, detail="会话不存在")
     return {
@@ -97,8 +176,12 @@ async def delete_session(
     kb_session: AsyncSession = Depends(get_kb_session),
 ):
     """删除指定会话。"""
+    try:
+        parsed = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的 session_id 格式")
     repo = ConversationRepository(kb_session)
-    deleted = await repo.soft_delete(session_id)
+    deleted = await repo.soft_delete(parsed)
     if not deleted:
         raise HTTPException(status_code=404, detail="会话不存在")
     await kb_session.commit()
