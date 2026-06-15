@@ -38,23 +38,41 @@ COMMENT ON COLUMN documents.doc_type IS '文件格式：pdf / md / html';
 
 
 -- 2. 文件摄入历史表（SHA256 去重 + 增量更新）
+--
+-- 注意：id 使用 UUID 以兼容 FileIntegrityChecker 的跨服务追踪语义。
+DROP TABLE IF EXISTS ingestion_history CASCADE;
 CREATE TABLE IF NOT EXISTS ingestion_history (
-    id              BIGSERIAL PRIMARY KEY,
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id     UUID,
+    source_path     TEXT NOT NULL,
     file_hash       TEXT NOT NULL,
-    file_path       TEXT NOT NULL,
     file_size       BIGINT,
-    status          TEXT NOT NULL CHECK (status IN ('success', 'failed', 'processing')),
+    status          TEXT NOT NULL CHECK (status IN ('processing', 'completed', 'failed')),
     category        TEXT,
     language        TEXT,
     doc_type        TEXT,
-    chunk_count     INTEGER,
-    error_msg       TEXT,
-    processed_at    TIMESTAMPTZ DEFAULT NOW()
+    total_chunks    INTEGER DEFAULT 0,
+    total_images    INTEGER DEFAULT 0,
+    error_message   TEXT,
+    started_at      TIMESTAMPTZ,
+    completed_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_ingestion_hash ON ingestion_history(file_hash);
 CREATE INDEX idx_ingestion_status ON ingestion_history(status);
-CREATE INDEX idx_ingestion_processed_at ON ingestion_history(processed_at);
+CREATE INDEX idx_ingestion_created_at ON ingestion_history(created_at);
+
+COMMENT ON TABLE ingestion_history IS '文件摄入历史：SHA256 去重 + 增量更新状态追踪';
+COMMENT ON COLUMN ingestion_history.document_id IS '关联的文档 ID（documents.id）';
+COMMENT ON COLUMN ingestion_history.source_path IS '源文件路径';
+COMMENT ON COLUMN ingestion_history.status IS '状态：processing / completed / failed';
+COMMENT ON COLUMN ingestion_history.total_chunks IS '摄入的 Chunk 总数';
+COMMENT ON COLUMN ingestion_history.total_images IS '摄入的图片总数（含跨模态）';
+COMMENT ON COLUMN ingestion_history.error_message IS '失败时的错误信息';
+COMMENT ON COLUMN ingestion_history.started_at IS '处理开始时间';
+COMMENT ON COLUMN ingestion_history.completed_at IS '处理完成时间';
+COMMENT ON COLUMN ingestion_history.created_at IS '记录创建时间';
 
 COMMENT ON TABLE ingestion_history IS '文件摄入历史：SHA256 去重，避免重复处理未变更文件';
 

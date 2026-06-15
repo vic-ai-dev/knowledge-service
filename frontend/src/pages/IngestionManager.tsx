@@ -2,19 +2,27 @@ import { InboxOutlined, PlayCircleOutlined, ReloadOutlined, CheckCircleFilled, C
 import { Alert, Button, Card, message, Modal, Progress, Select, Space, Spin, Table, Tag, Upload } from 'antd';
 import { useEffect, useState, useCallback } from 'react';
 import type { ColumnsType } from 'antd/es/table';
-import { getIngestionTraces, uploadFile } from '../api/ingestion';
-import type { IngestionTrace } from '../types';
+import { getIngestionHistory, uploadFile } from '../api/ingestion';
+
 import type { UploadProps } from 'antd';
 const { Dragger } = Upload;
+
+interface IngestionHistoryItem {
+  id: string; file_hash: string; file_path: string; file_size: number;
+  status: string; category: string; language: string; doc_type: string;
+  chunk_count: number; error_msg: string | null; processed_at: string | null;
+}
+
 const statusConfig: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
-  success: { color: 'green', icon: <CheckCircleFilled />, label: '成功' },
+  completed: { color: 'green', icon: <CheckCircleFilled />, label: '成功' },
   failed: { color: 'red', icon: <CloseCircleFilled />, label: '失败' },
-  processing: { color: 'blue', icon: <LoadingOutlined />, label: '处理中' },
+  running: { color: 'blue', icon: <LoadingOutlined />, label: '处理中' },
+  skipped: { color: 'orange', icon: <CheckCircleFilled />, label: '已跳过' },
 };
 
 export default function IngestionManager() {
   const [loading, setLoading] = useState(true);
-  const [history, setHistory] = useState<IngestionTrace[]>([]);
+  const [history, setHistory] = useState<IngestionHistoryItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -27,7 +35,7 @@ export default function IngestionManager() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getIngestionTraces({ page, page_size: pageSize });
+      const result = await getIngestionHistory({ page, page_size: pageSize });
       setHistory(result.items);
       setTotal(result.total);
     } catch (err: any) {
@@ -41,8 +49,8 @@ export default function IngestionManager() {
     fetchData();
   }, [fetchData]);
 
-  const handleRunIngestion = async (trace: IngestionTrace) => {
-    message.info(`重新摄取: ${trace.source_path}`);
+  const handleRunIngestion = async (trace: IngestionHistoryItem) => {
+    message.info(`重新摄取: ${trace.file_path}`);
     // TODO: 触发 Ingestion Pipeline 重新处理
   };
 
@@ -65,9 +73,9 @@ export default function IngestionManager() {
     }
   };
 
-  const columns: ColumnsType<IngestionTrace> = [
+  const columns: ColumnsType<IngestionHistoryItem> = [
     {
-      title: '文件', dataIndex: 'source_path', key: 'source_path', ellipsis: true, width: 300,
+      title: '文件', dataIndex: 'file_path', key: 'source_path', ellipsis: true, width: 300,
     },
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 100,
@@ -76,22 +84,36 @@ export default function IngestionManager() {
         return <Tag icon={cfg.icon} color={cfg.color}>{cfg.label}</Tag>;
       },
     },
-    { title: 'Chunks', dataIndex: 'total_chunks', key: 'total_chunks', width: 80 },
     {
-      title: '耗时', dataIndex: 'total_latency_ms', key: 'total_latency_ms', width: 100,
-      render: (v: number) => v ? `${v}ms` : '-',
+      title: '类型', dataIndex: 'doc_type', key: 'doc_type', width: 80,
+      render: (v: string) => <Tag>{v}</Tag>,
     },
-    { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
+    {
+      title: '分类', dataIndex: 'category', key: 'category', width: 100,
+      render: (v: string) => {
+        const m: Record<string, string> = {
+          employee_handbook: '员工手册', compliance: '合规指南',
+          technical_spec: '技术规范', architecture: '架构文档',
+        };
+        return m[v] || v;
+      },
+    },
+    { title: 'Chunks', dataIndex: 'chunk_count', key: 'chunk_count', width: 80 },
+    {
+      title: '大小', dataIndex: 'file_size', key: 'file_size', width: 100,
+      render: (v: number) => v ? `${(v / 1024).toFixed(1)}KB` : '-',
+    },
+    { title: '时间', dataIndex: 'processed_at', key: 'processed_at', width: 180 },
     {
       title: '操作', key: 'actions', width: 120,
-      render: (_: unknown, record: IngestionTrace) => (
+      render: (_: unknown, record: IngestionHistoryItem) => (
         <Space>
           {record.status === 'failed' && (
             <Button type="link" size="small" onClick={() => handleRunIngestion(record)}>
               重试
             </Button>
           )}
-          {record.status === 'success' && (
+          {record.status === 'completed' && (
             <Button type="link" size="small" onClick={() => handleRunIngestion(record)}>
               重新摄取
             </Button>
@@ -151,7 +173,7 @@ export default function IngestionManager() {
 
       {/* 摄取记录 */}
       <Card
-        title={`摄取记录 (${history.length})`}
+        title={`摄取记录 (${total})`}
         extra={
           <Button icon={<ReloadOutlined />} onClick={fetchData}>
             刷新
@@ -161,26 +183,11 @@ export default function IngestionManager() {
         <Table
           columns={columns}
           dataSource={history}
-          rowKey="trace_id"
+          rowKey="id"
           loading={loading}
           pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'], onChange: (p, ps) => { setPage(p); setPageSize(ps); } }}
           locale={{ emptyText: '暂无摄取记录' }}
           size="middle"
-          expandable={{
-            expandedRowRender: (record) => (
-              <div style={{ padding: 8 }}>
-                {record.error && (
-                  <Alert type="error" message={record.error} style={{ marginBottom: 8 }} />
-                )}
-                <Space>
-                  <Tag>加载: {record.stages?.load?.duration_ms || '-'}ms</Tag>
-                  <Tag>分块: {record.stages?.split?.duration_ms || '-'}ms</Tag>
-                  <Tag>编码: {record.stages?.encode?.duration_ms || '-'}ms</Tag>
-                  <Tag>索引: {record.stages?.index?.duration_ms || '-'}ms</Tag>
-                </Space>
-              </div>
-            ),
-          }}
         />
       </Card>
     </div>

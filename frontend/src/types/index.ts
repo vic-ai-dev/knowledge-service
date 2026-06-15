@@ -64,6 +64,20 @@ export interface IngestionRunResult {
   message?: string;
 }
 
+export interface IngestionHistoryItem {
+  id: string;
+  file_hash: string;
+  file_path: string;
+  file_size: number;
+  status: string;
+  category: string;
+  language: string;
+  doc_type: string;
+  chunk_count: number;
+  error_msg: string | null;
+  processed_at: string | null;
+}
+
 export interface IngestionTrace {
   trace_id: string;
   source_path: string;

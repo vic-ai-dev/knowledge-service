@@ -50,3 +50,8 @@ coverage.xml
 
 # Config (secrets)
 backend/config/*.yaml
+settings.yaml
+settings.yml
+
+# Codex
+.codex/

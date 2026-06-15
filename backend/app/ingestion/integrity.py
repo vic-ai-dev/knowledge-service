@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import uuid
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -86,6 +87,56 @@ class FileIntegrityChecker:
         )
         self._own_pool = True
         return self._pool
+
+    @trace_span()
+    async def register_document(
+        self,
+        document_id: str,
+        source_path: str,
+        title: str | None = None,
+        collection: str = "default",
+        category: str = "technical_spec",
+        language: str = "zh",
+        doc_type: str = "md",
+        file_size: int = 0,
+        file_hash: str = "",
+        chunk_count: int = 0,
+    ) -> None:
+        """向 documents 表写入或更新文档元数据。
+
+        使用 ON CONFLICT (file_hash) DO UPDATE 保证幂等性。
+        """
+        pool = await self._ensure_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """INSERT INTO documents
+                   (id, source_path, title, collection, category, language,
+                    doc_type, file_size, file_hash, chunk_count)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                   ON CONFLICT (file_hash) DO UPDATE SET
+                       chunk_count = EXCLUDED.chunk_count,
+                       updated_at = NOW()""",
+                document_id,
+                source_path,
+                title or "",
+                collection,
+                category,
+                language,
+                doc_type,
+                file_size,
+                file_hash,
+                chunk_count,
+            )
+
+        logger.info(
+            "integrity_register_document",
+            metadata={
+                "document_id": document_id,
+                "source_path": source_path,
+                "title": title,
+                "chunk_count": chunk_count,
+            },
+        )
 
     async def close(self) -> None:
         """关闭连接池（仅当由本实例创建时）。"""
@@ -178,6 +229,10 @@ class FileIntegrityChecker:
         source_path: str,
         file_hash: str,
         document_id: str,
+        category: str = "",
+        language: str = "",
+        doc_type: str = "",
+        file_size: int = 0,
     ) -> str:
         """注册新文件到 ingestion_history 表。
 
@@ -189,12 +244,11 @@ class FileIntegrityChecker:
 
         async with pool.acquire() as conn:
             await conn.execute(
-                """INSERT INTO ingestion_history (id, document_id, source_path, file_hash)
-                   VALUES ($1, $2, $3, $4)""",
-                run_id,
-                document_id,
-                source_path,
-                file_hash,
+                """INSERT INTO ingestion_history
+                   (id, document_id, source_path, file_hash, category, language, doc_type, file_size, status)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'processing')""",
+                run_id, document_id, source_path, file_hash,
+                category, language, doc_type, file_size,
             )
 
         logger.info(
@@ -206,6 +260,49 @@ class FileIntegrityChecker:
             },
         )
         return run_id
+
+    @trace_span()
+    async def record_ingestion_trace(
+        self,
+        source_path: str,
+        collection: str,
+        total_latency_ms: float = 0.0,
+        status: str = "",
+        total_chunks: int = 0,
+        total_images: int = 0,
+        stages: list[dict] | None = None,
+        error: str | None = None,
+    ) -> None:
+        """写入 ingestion_traces 表。"""
+        pool = await self._ensure_pool()
+        trace_id = str(uuid.uuid4())
+
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """INSERT INTO ingestion_traces
+                   (trace_id, source_path, collection, total_latency_ms, status,
+                    total_chunks, total_images, stages, error)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)""",
+                trace_id,
+                source_path,
+                collection,
+                int(total_latency_ms),
+                status,
+                total_chunks,
+                total_images,
+                json.dumps(stages) if stages else None,
+                error,
+            )
+
+        logger.info(
+            "integrity_trace_recorded",
+            metadata={
+                "trace_id": trace_id,
+                "source_path": source_path,
+                "status": status,
+                "total_chunks": total_chunks,
+            },
+        )
 
     @trace_span()
     async def update_status(

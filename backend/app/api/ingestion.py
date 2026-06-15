@@ -6,13 +6,15 @@ import hashlib
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from asyncpg import Connection
 
 from app.core.settings import get_settings
 from app.core.database import get_kb_conn
 from app.common.log import get_logger
+from app.core.trace import get_trace_context
+import tempfile
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
@@ -51,23 +53,36 @@ def _validate_file(filename: str, content: bytes) -> dict:
     return {"extension": ext.lstrip("."), "sha256": sha256, "size": len(content)}
 
 
+def _doc_type_from_ext(ext: str) -> str:
+    """从文件扩展名推断 doc_type。"""
+    mapping = {".md": "md", ".html": "html", ".htm": "html", ".pdf": "pdf"}
+    return mapping.get(ext.lower(), "md")
+
+
 @router.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    collection: str = "default",
-    category: str = "",
-    language: str = "",
+    collection: str = Form("default"),
+    category: str = Form(""),
+    language: str = Form(""),
 ):
     """上传文档文件。
 
     支持 PDF / Markdown / HTML。异步触发 Ingestion Pipeline。
-    文件校验通过后返回任务 ID。
+    文件校验通过后调用 IngestionPipeline 处理。
     """
     _check_rate_limit()
     content = await file.read()
     info = _validate_file(file.filename or "unknown", content)
 
-    # TODO(E5): 提交到 Ingestion Pipeline 异步处理
+    # 校验 category / language
+    _VALID_CATEGORIES = {"employee_handbook", "compliance", "technical_spec", "architecture"}
+    _VALID_LANGUAGES = {"zh", "en"}
+    if category not in _VALID_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"无效的 category: {category}. 允许值: {_VALID_CATEGORIES}")
+    if language not in _VALID_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"无效的 language: {language}. 允许值: {_VALID_LANGUAGES}")
+
     logger.info(
         "file_uploaded",
         message="文件上传成功",
@@ -82,14 +97,96 @@ async def upload_document(
         },
     )
 
+    # ── 保存上传文件到临时目录 ─────────────────────────
+    ext = Path(file.filename or "unknown").suffix
+    tmp_dir = Path(tempfile.mkdtemp(prefix="ks_upload_"))
+    tmp_path = tmp_dir / f"{info['sha256'][:16]}{ext}"
+    try:
+        tmp_path.write_bytes(content)
+    except Exception as e:
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        logger.error("upload_save_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=f"文件保存失败: {e}")
+
+    # ── 构建 IngestionDocument ─────────────────────────
+    doc_type = _doc_type_from_ext(ext)
+    title = Path(file.filename or "untitled").stem
+
+    from app.ingestion.models import IngestionDocument
+
+    ingestion_doc = IngestionDocument(
+        source_path=str(tmp_path),
+        doc_type=doc_type,
+        collection=collection,
+        category=category,
+        language=language,
+        title=title,
+        file_size=info["size"],
+        file_hash=info["sha256"],
+    )
+
+    # ── 创建 IngestionPipeline ─────────────────────────
+    from app.ingestion.pipeline import IngestionPipeline
+
+    pipeline = IngestionPipeline(
+        batch_processor=None,
+        vector_upserter=None,
+        integrity_checker=None,
+        progress_callback=None,
+    )
+
+    # ── 执行管线 ───────────────────────────────────────
+    run_start = time.monotonic()
+
+    try:
+        result = await pipeline.process_document(ingestion_doc, force=False)
+    except Exception as e:
+        elapsed = (time.monotonic() - run_start) * 1000
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        logger.error(
+            "upload_pipeline_error",
+            error=str(e),
+            metadata={
+                "filename": file.filename,
+                "elapsed_ms": round(elapsed, 2),
+            },
+        )
+        raise HTTPException(status_code=500, detail=f"文件处理失败: {e}")
+    finally:
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    # ── 处理结果 ───────────────────────────────────────
+    trace_ctx = get_trace_context()
+    trace_id = trace_ctx.get("trace_id", "")
+
+    if result.status.value == "completed":
+        status_msg = "completed"
+    elif result.status.value == "skipped":
+        status_msg = "skipped (already ingested)"
+    else:
+        status_msg = "failed"
+
+    stage_details = [
+        {"stage": s.stage, "duration_ms": round(s.duration_ms, 2), "items": s.items_processed}
+        for s in result.stages
+    ]
+
     return JSONResponse(
-        status_code=202,
+        status_code=200 if result.status.value in ("completed", "skipped") else 500,
         content={
-            "task_id": "pending",
+            "task_id": result.run_id,
+            "trace_id": trace_id,
             "filename": file.filename,
             "size": info["size"],
-            "status": "pending",
-            "message": "文件已接收，正在排队处理",
+            "status": status_msg,
+            "total_chunks": result.total_chunks,
+            "errors": result.errors,
+            "stages": stage_details,
+            "elapsed_ms": round((time.monotonic() - run_start) * 1000, 2),
+            "message": "文件处理完成" if result.status.value == "completed" else f"文件处理失败: {result.errors}",
         },
     )
 
@@ -107,27 +204,27 @@ async def list_ingestion_history(
     total = count_row["cnt"] if count_row else 0
 
     rows = await kb_conn.fetch("""
-        SELECT id, file_hash, file_path, file_size, status, category, language,
-               doc_type, chunk_count, error_msg, processed_at
+        SELECT id, file_hash, source_path, file_size, status, category, language,
+               doc_type, total_chunks, error_message, created_at
         FROM ingestion_history
-       ORDER BY processed_at DESC
+       ORDER BY created_at DESC
         LIMIT $1 OFFSET $2
    """, page_size, offset)
 
     items = []
     for r in rows:
         items.append({
-            "id": r["id"],
+            "id": str(r["id"]),
             "file_hash": r["file_hash"],
-            "file_path": r["file_path"],
+            "file_path": r["source_path"],
             "file_size": r["file_size"],
             "status": r["status"],
             "category": r["category"],
             "language": r["language"],
             "doc_type": r["doc_type"],
-            "chunk_count": r["chunk_count"],
-            "error_msg": r["error_msg"],
-            "processed_at": r["processed_at"].isoformat() if r["processed_at"] else None,
+            "chunk_count": r["total_chunks"],
+            "error_msg": r["error_message"],
+            "processed_at": r["created_at"].isoformat() if r["created_at"] else None,
         })
 
     return {"items": items, "total": total, "page": page, "page_size": page_size}
@@ -198,6 +295,7 @@ async def get_ingestion_trace(
         "error": row["error"],
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
     }
+   
 @router.get("/status/{run_id}")
 async def get_ingestion_status(
     run_id: str,

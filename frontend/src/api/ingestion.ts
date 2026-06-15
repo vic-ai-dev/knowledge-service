@@ -1,5 +1,5 @@
 import apiClient, { unwrapPaginated } from './client';
-import type { UploadResult, IngestionTrace } from '../types';
+import type { UploadResult, IngestionTrace, IngestionHistoryItem } from '../types';
 
 export const uploadFile = (file: File, category: string = '', language: string = '', collection: string = 'default') => {
   const formData = new FormData();
@@ -13,7 +13,7 @@ export const uploadFile = (file: File, category: string = '', language: string =
 };
 
 export const getIngestionHistory = (params?: { page?: number; page_size?: number }) =>
-  unwrapPaginated<IngestionTrace>(apiClient.get('/ingestion/history', { params }));
+  unwrapPaginated<IngestionHistoryItem>(apiClient.get('/ingestion/history', { params }));
 
 export const getIngestionTraces = (params?: { page?: number; page_size?: number }) =>
   unwrapPaginated<IngestionTrace>(apiClient.get('/ingestion/traces', { params }));

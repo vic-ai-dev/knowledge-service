@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     chunk_index       INTEGER,
     source_path       TEXT,
     token_count       INTEGER DEFAULT 0,
-    embedding         vector(1536),
+    embedding         vector(1024),
     created_at        TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -122,8 +122,7 @@ class PGVectorStore(BaseVectorStore):
                         ON CONFLICT (id) DO UPDATE SET
                             text        = EXCLUDED.text,
                             metadata    = EXCLUDED.metadata,
-                            embedding   = EXCLUDED.embedding,
-                            updated_at  = NOW()
+                            embedding   = EXCLUDED.embedding
                         """,
                         str(chunk_id),
                         chunk.get("text", ""),

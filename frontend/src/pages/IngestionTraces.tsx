@@ -1,37 +1,36 @@
 /* ============================================================================
- * Knowledge Service — IngestionTraces Ingestion 追踪页面 (G2)
+ * Knowledge Service — IngestionTraces 摄取追踪页面 (G2)
+ * 由于 ingestion_traces 表在管线 B3 中填充，当前复用 history 端点展示。
  * ============================================================================ */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, Table, Tag, Space, Spin, Alert, Button, Empty } from 'antd';
-import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
-import type { IngestionTrace } from '../types';
+import { Card, Table, Tag, Alert, Button, Empty, Tooltip } from 'antd';
+import { ReloadOutlined, CheckCircleFilled, CloseCircleFilled, LoadingOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { getIngestionTraces, getIngestionTraceDetail } from '../api/ingestion';
-import WaterfallChart from '../components/WaterfallChart';
-import type { Stage } from '../components/WaterfallChart';
+import { getIngestionHistory } from '../api/ingestion';
+import type { IngestionHistoryItem } from '../types';
 
-const statusConfig: Record<string, { color: string; label: string }> = {
-  success: { color: 'green', label: '成功' },
-  failed: { color: 'red', label: '失败' },
-  processing: { color: 'blue', label: '处理中' },
+const statusConfig: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
+  completed: { color: 'green', icon: <CheckCircleFilled />, label: '成功' },
+  failed: { color: 'red', icon: <CloseCircleFilled />, label: '失败' },
+  running: { color: 'blue', icon: <LoadingOutlined />, label: '处理中' },
+  processing: { color: 'blue', icon: <LoadingOutlined />, label: '处理中' },
+  skipped: { color: 'orange', icon: <CheckCircleFilled />, label: '已跳过' },
 };
 
 export default function IngestionTraces() {
   const [loading, setLoading] = useState(true);
-  const [traces, setTraces] = useState<IngestionTrace[]>([]);
+  const [traces, setTraces] = useState<IngestionHistoryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTrace, setSelectedTrace] = useState<IngestionTrace | null>(null);
-  const [traceLoading, setTraceLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getIngestionTraces({ page, page_size: pageSize });
+      const result = await getIngestionHistory({ page, page_size: pageSize });
       setTraces(result.items);
       setTotal(result.total);
     } catch (err: any) {
@@ -46,54 +45,33 @@ export default function IngestionTraces() {
     fetchData();
   }, [fetchData]);
 
-  const handleViewDetail = async (trace: IngestionTrace) => {
-    setSelectedTrace(trace);
-    setTraceLoading(true);
-    try {
-      const detail = await getIngestionTraceDetail(trace.trace_id);
-      setSelectedTrace(detail);
-    } catch (err) {
-      console.error('Failed to load trace detail:', err);
-    } finally {
-      setTraceLoading(false);
-    }
-  };
-
-  const waterfallStages = (trace: IngestionTrace): Stage[] => {
-    const s = trace.stages as Record<string, { duration_ms: number; start_ms?: number }> | undefined;
-    if (!s) return [];
-    return [
-      { name: 'Load', start_ms: s.load?.start_ms ?? 0, duration_ms: s.load?.duration_ms ?? 0 },
-      { name: 'Split', start_ms: s.split?.start_ms ?? 0, duration_ms: s.split?.duration_ms ?? 0 },
-      { name: 'Encode', start_ms: s.encode?.start_ms ?? 0, duration_ms: s.encode?.duration_ms ?? 0 },
-      { name: 'Index', start_ms: s.index?.start_ms ?? 0, duration_ms: s.index?.duration_ms ?? 0 },
-      { name: 'BM25 Index', start_ms: s.bm25?.start_ms ?? 0, duration_ms: s.bm25?.duration_ms ?? 0 },
-    ].filter((st) => st.duration_ms > 0);
-  };
-
-  const columns: ColumnsType<IngestionTrace> = [
-    { title: 'Trace ID', dataIndex: 'trace_id', key: 'trace_id', width: 180, ellipsis: true },
-    { title: '文件', dataIndex: 'source_path', key: 'source_path', ellipsis: true, width: 300 },
+  const columns: ColumnsType<IngestionHistoryItem> = [
     {
-      title: '状态', dataIndex: 'status', key: 'status', width: 80,
+      title: '文件', dataIndex: 'file_path', key: 'file_path', ellipsis: true, width: 300,
+      render: (v: string) => <Tooltip title={v}><span>{v ? v.split('/').pop() || v : '-'}</span></Tooltip>,
+    },
+    {
+      title: '状态', dataIndex: 'status', key: 'status', width: 90,
       render: (s: string) => {
-        const cfg = statusConfig[s];
-        return cfg ? <Tag color={cfg.color}>{cfg.label}</Tag> : <Tag>{s}</Tag>;
+        const cfg = statusConfig[s] || { color: 'default', icon: null, label: s };
+        return <Tag icon={cfg.icon} color={cfg.color}>{cfg.label}</Tag>;
       },
     },
+    { title: 'Chunks', dataIndex: 'chunk_count', key: 'chunk_count', width: 70 },
     {
-      title: '耗时', dataIndex: 'total_latency_ms', key: 'total_latency_ms', width: 100,
-      render: (v: number) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{v}ms</span>,
+      title: '大小', dataIndex: 'file_size', key: 'file_size', width: 90,
+      render: (v: number) => {
+        if (v == null) return '-';
+        return v > 1048576 ? `${(v / 1048576).toFixed(1)}MB` : `${(v / 1024).toFixed(1)}KB`;
+      },
     },
-    { title: 'Chunks', dataIndex: 'total_chunks', key: 'total_chunks', width: 80 },
-    { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
+    { title: '集合', dataIndex: 'collection', key: 'collection', width: 80 },
+    { title: 'Hash', dataIndex: 'file_hash', key: 'file_hash', width: 80, ellipsis: true,
+      render: (v: string) => <Tooltip title={v}><code style={{ fontSize: 11 }}>{v ? v.slice(0, 12) : '-'}</code></Tooltip>,
+    },
     {
-      title: '操作', key: 'actions', width: 80,
-      render: (_: unknown, record: IngestionTrace) => (
-        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-          瀑布图
-        </Button>
-      ),
+      title: '时间', dataIndex: 'processed_at', key: 'processed_at', width: 170,
+      render: (v: string) => v ? new Date(v).toLocaleString() : '-',
     },
   ];
 
@@ -105,34 +83,8 @@ export default function IngestionTraces() {
     <div>
       <h2 style={{ marginBottom: 24 }}>Ingestion 追踪</h2>
 
-      {/* 选中 trace 的瀑布图 */}
-      {selectedTrace && (
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Space>
-              <strong>Trace:</strong> {selectedTrace.trace_id}
-              <Tag color={statusConfig[selectedTrace.status]?.color}>
-                {statusConfig[selectedTrace.status]?.label}
-              </Tag>
-              <span style={{ color: '#666' }}>{selectedTrace.source_path}</span>
-            </Space>
-            <Button size="small" onClick={() => setSelectedTrace(null)}>关闭</Button>
-          </div>
-          {traceLoading ? (
-            <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
-          ) : (
-            <WaterfallChart
-              title="阶段时序瀑布图"
-              stages={waterfallStages(selectedTrace)}
-              totalDuration={selectedTrace.total_latency_ms}
-            />
-          )}
-        </Card>
-      )}
-
-      {/* 摄取历史列表 */}
       <Card
-        title={`摄取历史 (${total})`}
+        title={`摄取历史追踪 (${total})`}
         extra={
           <Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
         }
@@ -140,7 +92,7 @@ export default function IngestionTraces() {
         <Table
           columns={columns}
           dataSource={traces}
-          rowKey="trace_id"
+          rowKey="id"
           loading={loading}
           pagination={{
             current: page,
@@ -150,7 +102,7 @@ export default function IngestionTraces() {
             pageSizeOptions: ['10', '20', '50'],
             onChange: (p, ps) => { setPage(p); setPageSize(ps); },
           }}
-          locale={{ emptyText: <Empty description="暂无摄取历史" /> }}
+          locale={{ emptyText: <Empty description="暂无摄取追踪记录" /> }}
           size="middle"
         />
       </Card>

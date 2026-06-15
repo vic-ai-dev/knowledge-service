@@ -131,6 +131,10 @@ class IngestionPipeline:
                 source_path=doc.source_path,
                 file_hash=doc.file_hash or "",
                 document_id=document_id,
+                category=doc.category,
+                language=doc.language or "",
+                doc_type=doc.doc_type,
+                file_size=doc.file_size or 0,
             )
         else:
             run_id = str(uuid.uuid4())
@@ -152,6 +156,12 @@ class IngestionPipeline:
             return batch_result
 
         chunks = batch_result.chunks
+
+        # ── 3.5 回填 document_id ────────────────────────────
+        # BatchProcessor 生成 chunks 时不知道 document_id，
+        # 需要在这里回填后再写入存储层。
+        for chunk in chunks:
+            chunk.document_id = document_id
 
         # ── 4. VectorUpserter 写入 pgvector ─────────────────
         if chunks:
@@ -179,6 +189,73 @@ class IngestionPipeline:
 
         # ── 5. 更新摄入状态 ─────────────────────────────────
         batch_result.document_id = document_id
+
+        # ── 6. 写入 documents 表 ────────────────────────────
+        if doc.source_path:
+            try:
+                await self._integrity.register_document(
+                    document_id=document_id,
+                    source_path=doc.source_path,
+                    title=doc.title,
+                    collection=doc.collection,
+                    category=doc.category,
+                    language=doc.language or "",
+                    doc_type=doc.doc_type,
+                    file_size=doc.file_size or 0,
+                    file_hash=doc.file_hash or "",
+                    chunk_count=len(chunks),
+                )
+                logger.info(
+                    "pipeline_document_registered",
+                    metadata={
+                        "document_id": document_id,
+                        "source_path": doc.source_path,
+                        "chunk_count": len(chunks),
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "pipeline_document_register_warn",
+                    error=str(e),
+                    metadata={"document_id": document_id},
+                )
+
+        # ── 7. 写入 ingestion_traces 表 ──────────────────────
+        if doc.source_path:
+            try:
+                stage_data = [
+                    {
+                        "stage": s.stage,
+                        "duration_ms": round(s.duration_ms, 2),
+                        "items": s.items_processed,
+                    }
+                    for s in batch_result.stages
+                ]
+                await self._integrity.record_ingestion_trace(
+                    source_path=doc.source_path,
+                    collection=doc.collection,
+                    total_latency_ms=sum(s.duration_ms for s in batch_result.stages),
+                    status=batch_result.status.value,
+                    total_chunks=len(chunks),
+                    stages=stage_data,
+                    error="; ".join(batch_result.errors) if batch_result.errors else None,
+                )
+                logger.info(
+                    "pipeline_trace_recorded",
+                    metadata={
+                        "run_id": run_id,
+                        "source_path": doc.source_path,
+                        "total_chunks": len(chunks),
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "pipeline_trace_warning",
+                    error=str(e),
+                    metadata={"source_path": doc.source_path},
+                )
+
+        # ── 8. 更新摄入状态 ───────────────────────────────────
         if doc.source_path:
             await self._integrity.update_status(
                 run_id=run_id,
