@@ -11,6 +11,22 @@ const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// ── 请求去重（仅对 GET）：同一 URL + params 的并发请求共享 Promise ──
+const inflightRequests = new Map<string, Promise<unknown>>();
+
+const originalGet = apiClient.get.bind(apiClient);
+apiClient.get = ((url: string, config?: Record<string, unknown>) => {
+  const key = `${url}:${JSON.stringify(config?.params ?? {})}`;
+  const existing = inflightRequests.get(key);
+  if (existing) return existing as ReturnType<typeof originalGet>;
+
+  const promise = originalGet(url, config).finally(() => {
+    setTimeout(() => inflightRequests.delete(key), 0);
+  });
+  inflightRequests.set(key, promise);
+  return promise;
+}) as typeof apiClient.get;
+
 // 响应拦截：统一错误处理
 apiClient.interceptors.response.use(
   (response) => response,

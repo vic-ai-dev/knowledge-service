@@ -1,6 +1,6 @@
 """通用日志模块 — structlog 结构化日志。
 
-提供统一的结构化日志配置和获取接口，日志格式全局统一（console 方括号格式 + file JSON）。
+提供统一的结构化日志配置和获取接口，日志格式全局统一（console ConsoleRenderer 彩色结构化格式 + file JSON）。
 属于 common 基础设施层，非 observability 范畴。
 """
 
@@ -19,7 +19,7 @@ from app.common.log.structlog_processors import (
     auto_exc_info,
     capture_logger_name,
 )
-from app.common.log.renderers import BracketConsoleRenderer
+from structlog.dev import ConsoleRenderer
 
 
 # ── setup_structlog ──────────────────────────────────────
@@ -28,7 +28,7 @@ from app.common.log.renderers import BracketConsoleRenderer
 def setup_structlog() -> None:
     """配置 structlog 为全局日志处理器，启动时调用一次。
 
-    - Console 输出 -> BracketConsoleRenderer（方括号格式）
+    - Console 输出 -> ConsoleRenderer（彩色结构化格式）
     - File 输出    -> JSONRenderer（JSON 行，机器可解析）
 
     注意：必须在任何业务 import 之前调用，通常在 ``create_app()`` 第一行。
@@ -68,7 +68,7 @@ def setup_structlog() -> None:
         processors=[
             capture_logger_name,
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            BracketConsoleRenderer(),
+            ConsoleRenderer(),
         ],
     )
 
