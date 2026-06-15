@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
-@router.get("/")
+@router.get("")
 async def list_documents(
     kb_conn: Connection = Depends(get_kb_conn),
     collection: str | None = Query(None),

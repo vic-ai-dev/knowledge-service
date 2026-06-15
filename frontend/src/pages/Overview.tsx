@@ -2,7 +2,7 @@
  * Knowledge Service — Overview 系统总览页面 (G1)
  * ============================================================================ */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, Table, Spin, Alert, Tag, Descriptions } from 'antd';
 import {
   FileTextOutlined,
@@ -53,6 +53,7 @@ export default function Overview() {
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<SystemConfig | null>(null);
 
+
   useEffect(() => {
     let cancelled = false;
     Promise.all([getStats(), getConfig()])
@@ -75,7 +76,7 @@ export default function Overview() {
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
-        <Spin size="large" tip="加载统计数据..." />
+        <Spin size="large" />
       </div>
     );
   }

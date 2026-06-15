@@ -65,7 +65,7 @@ export default function EvaluationPanel() {
   if (loading && results.length === 0) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
-        <Spin size="large" tip="加载评估数据..." />
+        <Spin size="large" />
       </div>
     );
   }
