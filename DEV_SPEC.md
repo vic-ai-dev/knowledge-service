@@ -22,34 +22,34 @@
 本项目构建一个可扩展、高可观测、易迭代的 RAG 知识检索服务平台。系统整体采用前后端分离架构：
 
 ```mermaid
-flowchart TB
+graph TB
     subgraph Clients["客户端层"]
         REACT["React SPA (Browser)"]
-        MCPC["MCP Client (Copilot/Claude)"]
+        MCPC["MCP Client (Copilot / Claude)"]
     end
 
-    subgraph BACKEND["后端层 (FastAPI)"]
-        REST["REST API<br/>/api/*"]
-        MCP["MCP SSE<br/>/mcp/sse"]
-        WS["WebSocket<br/>/api/ws/*"]
+    subgraph BE["后端层 (FastAPI)"]
+        REST["REST API /api/*"]
+        MCP_SRV["MCP SSE /mcp/sse"]
+        WS_SRV["WebSocket /api/ws/*"]
         API_Layer["API 路由层"]
-        Service["Service 层<br/>DocumentManager / QueryEngine / EvalRunner"]
-        RAG["RAG 引擎<br/>Ingestion Pipeline / Query Engine / Libs"]
+        Srv["Service 层 (DocumentManager / QueryEngine / EvalRunner)"]
+        RAG["RAG 引擎 (Ingestion Pipeline / Query Engine / Libs)"]
     end
 
-    subgraph STORAGE["存储层"]
-        PG["PostgreSQL<br/>knowledge 库<br/>业务数据 / 索引 / 日志"]
-        PGV["pgvector<br/>knowledge_rag 库<br/>向量检索"]
+    subgraph Storage["存储层"]
+        PG["PostgreSQL -- knowledge 库 (业务数据 / 索引 / 日志)"]
+        PGV["pgvector -- knowledge_rag 库 (向量检索)"]
     end
 
     REACT -->|HTTP REST| REST
-    MCPC -->|MCP/SSE| MCP
-    REACT -->|WebSocket| WS
+    MCPC -->|MCP/SSE| MCP_SRV
+    REACT -->|WebSocket| WS_SRV
     REST --> API_Layer
-    MCP --> API_Layer
-    WS --> API_Layer
-    API_Layer --> Service
-    Service --> RAG
+    MCP_SRV --> API_Layer
+    WS_SRV --> API_Layer
+    API_Layer --> Srv
+    Srv --> RAG
     RAG --> PG
     RAG --> PGV
 ```
@@ -73,11 +73,11 @@ flowchart TB
 ### 2.1 前后端分离架构
 
 ```mermaid
-flowchart LR
-    subgraph Frontend["Frontend (React + Vite)"]
+graph LR
+    subgraph FE["Frontend (React + Vite)"]
         SPA["SPA<br/>localhost:5173"]
     end
-    subgraph Backend["Backend (FastAPI)"]
+    subgraph BE["Backend (FastAPI)"]
         API["REST API<br/>localhost:8000/api"]
     end
     SPA -->|"HTTP JSON"| API
@@ -1040,38 +1040,30 @@ CREATE INDEX idx_chunks_embedding_hnsw ON document_chunks
 ### 5.1 整体架构图
 
 ```mermaid
-flowchart TB
+graph TB
     subgraph Clients["客户端层"]
-        REACT["React SPA<br/>localhost:5173"]
-        MCPC["MCP Client<br/>(Copilot / Claude Desktop)"]
+        REACT["React SPA (localhost:5173)"]
+        MCPC["MCP Client (Copilot / Claude Desktop)"]
     end
 
-    subgraph FastAPI["FastAPI Backend (localhost:8000)"]
-        direction TB
+    subgraph BE["FastAPI Backend (localhost:8000)"]
         API["/api/* REST API"]
         MCP_SSE["/mcp/sse MCP SSE"]
         WS_CH["/api/ws/* WebSocket"]
-
-        subgraph Service["Service Layer"]
-            DM["DocumentManager"]
-            QE["QueryEngine"]
-            ER["EvalRunner"]
-            TS["TraceService"]
-        end
-
-        subgraph RAG["RAG Engine"]
-            direction TB
-            ING["Ingestion Pipeline<br/>Load → Split(按文件类型) → Transform → Embed → Upsert"]
-            QRY["Query Engine<br/>QueryProc → HybridSearch → Fusion → Rerank"]
-            LIBS["Libs<br/>LLM / Embedding / Splitter / VectorStore / Reranker"]
-            OBS["Observability<br/>structlog / TraceContext"]
-        end
+        DM["DocumentManager"]
+        QE["QueryEngine"]
+        ER["EvalRunner"]
+        TS["TraceService"]
+        ING["Ingestion Pipeline"]
+        QRY["Query Engine"]
+        LIBS["Libs (LLM / Embedding / Splitter / VectorStore / Reranker)"]
+        OBS["Observability (structlog / TraceContext)"]
     end
 
     subgraph Storage["Storage Layer"]
-        PG["PostgreSQL<br/>knowledge 库<br/>- ingestion_history<br/>- image_index<br/>- evaluation_results<br/>- traces"]
-        PGV["pgvector<br/>knowledge_rag 库<br/>- dense vectors<br/>- chunk contents<br/>- metadata"]
-        BM25["pg_bm25（PostgreSQL）<br/>全文检索 + BM25 Index"]
+        PG["PostgreSQL (knowledge) -- 业务数据/索引/日志"]
+        PGV["pgvector (knowledge_rag) -- 密集向量/Chunk元数据"]
+        BM25["pg_bm25 (PostgreSQL) -- 全文检索 + BM25 索引"]
     end
 
     REACT --> API

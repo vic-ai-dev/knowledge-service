@@ -24,8 +24,6 @@ _logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理。"""
-    # ── 初始化结构化日志 ──
-    setup_structlog()
     _logger.info(
         "service_startup",
         event_type="http_request",
@@ -72,6 +70,8 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """创建并配置 FastAPI 应用。"""
+    # ── 初始化结构化日志（优先于所有模块级日志） ──
+    setup_structlog()
     settings = get_settings()
 
     app = FastAPI(
