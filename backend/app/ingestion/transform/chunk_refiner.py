@@ -87,7 +87,6 @@ class ChunkRefiner(BaseTransform):
         if filtered_count > 0 or truncated_count > 0:
             logger.info(
                 "chunk_refiner",
-                event_type="splitting",
                 metadata={
                     "input_count": len(chunks),
                     "output_count": len(refined),

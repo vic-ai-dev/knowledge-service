@@ -122,7 +122,7 @@ class CrossEncoderReranker(BaseReranker):
 
     # ── BaseReranker 接口实现 ──
 
-    @trace_span("rerank")
+    @trace_span()
     async def rerank(
         self,
         query: str,

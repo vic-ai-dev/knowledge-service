@@ -76,7 +76,7 @@ class HybridSearch:
 
     # ── 核心方法 ──────────────────────────────────────────────
 
-    @trace_span("retrieval", "hybrid_search")
+    @trace_span()
     async def search(
         self,
         query: RetrievalQuery,
@@ -178,7 +178,6 @@ class HybridSearch:
 
             logger.info(
                 "hybrid_search_done",
-                event_type="retrieval",
                 metadata={
                     "search_mode": query.search_mode,
                     "dense_results": len(dense_results),
@@ -203,7 +202,6 @@ class HybridSearch:
             ))
             logger.error(
                 "hybrid_search_error",
-                event_type="retrieval",
                 error=str(e),
                 metadata={"search_mode": query.search_mode},
             )

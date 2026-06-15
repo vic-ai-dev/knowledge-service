@@ -70,7 +70,7 @@ class DenseEncoder:
 
     # ── 核心方法 ──
 
-    @trace_span("embedding", "dense_encode")
+    @trace_span()
     async def encode(self, chunks: list[ChunkRecord]) -> list[ChunkRecord]:
         """对 ChunkRecord 列表执行批量 Embedding。
 
@@ -108,7 +108,6 @@ class DenseEncoder:
 
             logger.info(
                 "dense_encode_batch",
-                event_type="embedding",
                 metadata={
                     "batch_start": start,
                     "batch_size": len(batch),
@@ -120,7 +119,6 @@ class DenseEncoder:
 
         logger.info(
             "dense_encode_complete",
-            event_type="embedding",
             metadata={"total_chunks": total},
         )
 

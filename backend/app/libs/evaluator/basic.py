@@ -43,7 +43,7 @@ class BasicEvaluator(BaseEvaluator):
         if not retrieved_chunks:
             raise EvaluatorError("retrieved_chunks list cannot be empty")
 
-    @trace_span("evaluation")
+    @trace_span()
     async def evaluate(
         self,
         query: str,

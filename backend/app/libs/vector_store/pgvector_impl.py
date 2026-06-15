@@ -98,7 +98,7 @@ class PGVectorStore(BaseVectorStore):
 
     # ── BaseVectorStore 接口实现 ──
 
-    @trace_span("vector_store", span_name="upsert")
+    @trace_span(span_name="upsert")
     async def upsert(self, chunks: list[dict]) -> int:
         """批量写入 / 更新向量。"""
         self._validate_chunks(chunks)
@@ -145,7 +145,7 @@ class PGVectorStore(BaseVectorStore):
                 count += 1
         return count
 
-    @trace_span("vector_store", span_name="query")
+    @trace_span(span_name="query")
     async def query(
         self,
         embedding: list[float],
@@ -207,7 +207,7 @@ class PGVectorStore(BaseVectorStore):
             for r in rows
         ]
 
-    @trace_span("vector_store", span_name="delete")
+    @trace_span(span_name="delete")
     async def delete(self, chunk_ids: list[str]) -> int:
         if not chunk_ids:
             return 0
@@ -225,7 +225,7 @@ class PGVectorStore(BaseVectorStore):
         parts = result.split()
         return int(parts[-1]) if len(parts) > 1 else 0
 
-    @trace_span("vector_store", span_name="delete_by_doc_id")
+    @trace_span(span_name="delete_by_doc_id")
     async def delete_by_doc_id(self, doc_id: str) -> int:
         pool = await self._get_pool()
         try:

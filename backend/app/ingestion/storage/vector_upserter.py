@@ -79,7 +79,7 @@ class VectorUpserter:
 
     # ── 核心方法 ──
 
-    @trace_span("indexing", "vector_upsert")
+    @trace_span()
     async def upsert(self, chunks: list[ChunkRecord]) -> int:
         """批量写入 ChunkRecord 到 pgvector。
 
@@ -106,7 +106,6 @@ class VectorUpserter:
         if not valid_docs:
             logger.warning(
                 "vector_upsert_skip_all",
-                event_type="indexing",
                 metadata={"total": len(chunks), "skipped": skipped},
             )
             return 0
@@ -115,7 +114,6 @@ class VectorUpserter:
 
         logger.info(
             "vector_upsert_done",
-            event_type="indexing",
             metadata={
                 "total_input": len(chunks),
                 "upserted": count,
@@ -125,7 +123,7 @@ class VectorUpserter:
 
         return count
 
-    @trace_span("indexing", "vector_delete_by_doc_id")
+    @trace_span()
     async def delete_by_doc_id(self, doc_id: str) -> int:
         """按文档 ID 删除向量。
 
@@ -138,7 +136,6 @@ class VectorUpserter:
         count = await self._store.delete_by_doc_id(doc_id)
         logger.info(
             "vector_delete_by_doc_id",
-            event_type="indexing",
             metadata={"doc_id": doc_id, "deleted": count},
         )
         return count

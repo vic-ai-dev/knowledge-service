@@ -189,7 +189,6 @@ async def update_document(
 
     logger.info(
         "document_updated",
-        event_type="http_request",
         message="文档已更新",
         metadata={"doc_id": doc_id, "title": title, "category": category, "language": language},
     )
@@ -216,7 +215,6 @@ async def delete_document(
 
     logger.info(
         "document_deleted",
-        event_type="http_request",
         message="文档已删除",
         metadata={"doc_id": doc_id},
     )
@@ -229,7 +227,6 @@ async def reindex_document(doc_id: str):
     # TODO(E12): 触发 IngestionPipeline 重新处理该文档
     logger.info(
         "document_reindex",
-        event_type="http_request",
         message="文档重新索引已触发",
         metadata={"doc_id": doc_id},
     )
@@ -261,7 +258,6 @@ async def batch_delete_documents(
 
     logger.info(
         "documents_batch_deleted",
-        event_type="http_request",
         message="批量删除文档",
         metadata={"count": len(doc_ids)},
     )

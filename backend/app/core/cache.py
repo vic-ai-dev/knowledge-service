@@ -77,7 +77,6 @@ class TTLCache:
         if expired:
             logger.debug(
                 "cache_cleanup",
-                event_type="http_request",
                 message=f"清理了 {len(expired)} 条过期缓存",
                 metadata={"expired_count": len(expired), "remaining": self.size},
             )

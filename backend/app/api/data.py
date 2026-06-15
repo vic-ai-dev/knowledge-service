@@ -189,7 +189,6 @@ async def create_collection(
 
     logger.info(
         "collection_created",
-        event_type="http_request",
         message="集合已创建",
         metadata={"name": name, "description": description},
     )
@@ -217,7 +216,6 @@ async def delete_collection(
 
     logger.info(
         "collection_deleted",
-        event_type="http_request",
         message="集合已删除",
         metadata={"name": name},
     )

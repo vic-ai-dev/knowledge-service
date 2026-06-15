@@ -50,7 +50,6 @@ async def _create_pool(
         )
         logger.info(
             "db_pool_created",
-            event_type="http_request",
             message=f"数据库连接池创建成功 [{label}]",
             metadata={"host": host, "port": port, "database": database, "min_size": min_size, "max_size": max_size},
         )
@@ -58,7 +57,6 @@ async def _create_pool(
     except asyncpg.PostgresError as e:
         logger.error(
             "db_pool_failed",
-            event_type="error",
             error=str(e),
             message=f"数据库连接池创建失败 [{label}]",
             metadata={"host": host, "port": port, "database": database},
@@ -103,12 +101,12 @@ async def close_db_pools() -> None:
     if _knowledge_pool:
         await _knowledge_pool.close()
         _knowledge_pool = None
-        logger.info("db_pool_closed", event_type="http_request", message="知识库连接池已关闭")
+        logger.info("db_pool_closed", message="知识库连接池已关闭")
 
     if _rag_pool:
         await _rag_pool.close()
         _rag_pool = None
-        logger.info("db_pool_closed", event_type="http_request", message="向量库连接池已关闭")
+        logger.info("db_pool_closed", message="向量库连接池已关闭")
 
 
 # ── 获取池 ─────────────────────────────────────────────

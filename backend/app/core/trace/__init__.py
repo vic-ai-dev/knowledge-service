@@ -77,12 +77,17 @@ def trace_context(
     span_id: str | None = None,
     parent_span_id: str | None = None,
     request_id: str | None = None,
+    enabled: bool = True,
 ) -> Generator[dict[str, str], None, None]:
     """创建顶层追踪上下文。
 
     通常在请求入口调用；如果没有 trace_id 则自动生成。
     如果已有上下文则原样套用（跨服务传播）。
     """
+    if not enabled:
+        yield {}
+        return
+
     new_trace_id = trace_id or get_trace_id() or generate_id()
     new_span_id = span_id or generate_id()
     new_parent_span_id = parent_span_id or get_parent_span_id() or ""
@@ -117,9 +122,15 @@ def span(name: str = "") -> Generator[dict[str, str], None, None]:
     """
     current_trace_id = get_trace_id()
     if not current_trace_id:
-        with trace_context() as ctx:
+        try:
+            from app.core.settings import get_settings
+            enabled = get_settings().observability.tracing.enabled
+        except Exception:
+            enabled = True
+        with trace_context(enabled=enabled) as ctx:
             yield ctx
         return
+
 
     current_span_id = get_span_id()
     new_span_id = generate_id()

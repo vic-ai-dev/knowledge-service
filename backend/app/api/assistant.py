@@ -24,7 +24,6 @@ async def ask(
     # TODO(E13): 连接 LLM + QueryPipeline
     logger.info(
         "api_ask",
-        event_type="llm_call",
         message="AI 助手问答请求",
         metadata={"query": query, "search_mode": search_mode, "session_id": session_id},
     )
@@ -60,7 +59,6 @@ async def delete_session(session_id: str):
     # TODO(E13): 从数据库删除会话
     logger.info(
         "session_deleted",
-        event_type="http_request",
         message="会话已删除",
         metadata={"session_id": session_id},
     )

@@ -165,9 +165,14 @@ class LoggingConfig(BaseModel):
     service_name: str = "knowledge_service"
 
 
+class TracingConfig(BaseModel):
+    enabled: bool = True
+
+
 class ObservabilityConfig(BaseModel):
     enabled: bool = True
     logging: LoggingConfig = LoggingConfig()
+    tracing: TracingConfig = TracingConfig()
 
 
 class ServerConfig(BaseModel):

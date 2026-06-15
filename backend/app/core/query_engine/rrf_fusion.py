@@ -48,7 +48,7 @@ class RRFFusion:
 
     # ── 核心方法 ──────────────────────────────────────────────
 
-    @trace_span("retrieval", "rrf_fusion")
+    @trace_span()
     def fuse(
         self,
         dense_results: list[RankedChunk],
@@ -108,7 +108,6 @@ class RRFFusion:
 
         logger.info(
             "rrf_fusion_done",
-            event_type="retrieval",
             metadata={
                 "dense_input": len(dense_results),
                 "sparse_input": len(sparse_results),

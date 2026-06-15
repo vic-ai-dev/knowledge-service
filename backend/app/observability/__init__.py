@@ -6,11 +6,3 @@
 - 评估工具（evaluation）
 """
 
-# 向后兼容：observability 仍暴露 get_logger / setup_structlog
-from app.common.log import get_logger, setup_structlog  # noqa: F401
-
-
-__all__ = [
-    "get_logger",
-    "setup_structlog",
-]

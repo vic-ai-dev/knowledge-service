@@ -124,7 +124,7 @@ class BatchProcessor:
 
     # ── 核心方法 ──
 
-    @trace_span("ingestion", "batch_processor")
+    @trace_span()
     async def process_document(
         self,
         doc: IngestionDocument,
@@ -276,7 +276,6 @@ class BatchProcessor:
 
             logger.info(
                 "batch_processor_done",
-                event_type="ingestion",
                 metadata={
                     "run_id": run_id,
                     "source_path": doc.source_path,
@@ -296,14 +295,13 @@ class BatchProcessor:
             ))
             logger.error(
                 "batch_processor_error",
-                event_type="ingestion",
                 error=str(e),
                 metadata={"run_id": run_id, "source_path": doc.source_path},
             )
 
         return result
 
-    @trace_span("ingestion", "batch_processor_batch")
+    @trace_span()
     async def process_batch(
         self,
         documents: list[IngestionDocument],
@@ -320,7 +318,6 @@ class BatchProcessor:
         for i, doc in enumerate(documents):
             logger.info(
                 "batch_processor_progress",
-                event_type="ingestion",
                 metadata={
                     "doc_index": i,
                     "total": len(documents),

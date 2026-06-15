@@ -53,7 +53,7 @@ export default function IngestionManager() {
     }
     setUploading(true);
     try {
-      await uploadFile(fileList[0]);
+      await uploadFile(fileList[0], selectedCategory, selectedLanguage);
       message.success('文件已提交摄取');
       setUploadModalOpen(false);
       setFileList([]);
@@ -118,6 +118,30 @@ export default function IngestionManager() {
 
       {/* 上传区域 */}
       <Card style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16 }}>
+          <Space wrap>
+            <Select
+              value={selectedCategory}
+              onChange={setSelectedCategory}
+              style={{ width: 140 }}
+              options={[
+                { value: 'employee_handbook', label: '员工手册' },
+                { value: 'compliance', label: '合规指南' },
+                { value: 'technical_spec', label: '技术规范' },
+                { value: 'architecture', label: '架构文档' },
+              ]}
+            />
+            <Select
+              value={selectedLanguage}
+              onChange={setSelectedLanguage}
+              style={{ width: 100 }}
+              options={[
+                { value: 'zh', label: '中文' },
+                { value: 'en', label: 'English' },
+              ]}
+            />
+          </Space>
+        </div>
         <Dragger {...uploadProps}>
           <p className="ant-upload-drag-icon"><InboxOutlined /></p>
           <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>

@@ -38,7 +38,7 @@ mcp = FastMCP(
     name="query_knowledge_hub",
     description="查询知识库，返回 Top-K 相关文档片段及引用。",
 )
-@trace_span("mcp", "query_knowledge_hub")
+@trace_span()
 async def query_knowledge_hub(
     query: str,
     top_k: int = 5,
@@ -59,7 +59,6 @@ async def query_knowledge_hub(
     # TODO(E11): 连接 QueryPipeline 实现真实检索
     logger.info(
         "mcp_query",
-        event_type="retrieval",
         message="MCP 查询请求",
         metadata={"query": query, "top_k": top_k, "search_mode": search_mode, "rerank": rerank},
     )
@@ -70,11 +69,11 @@ async def query_knowledge_hub(
     name="list_collections",
     description="列出知识库中所有可用的集合/分类。",
 )
-@trace_span("mcp", "list_collections")
+@trace_span()
 async def list_collections() -> str:
     """列出知识库集合与分类。"""
     # TODO(E11): 连接 Database 查询实际集合
-    logger.info("mcp_list_collections", event_type="retrieval", message="MCP 列出集合")
+    logger.info("mcp_list_collections", message="MCP 列出集合")
     return "可用集合: default\n分类: employee_handbook, compliance, technical_spec, architecture\n语言: zh, en"
 
 
@@ -82,7 +81,7 @@ async def list_collections() -> str:
     name="get_document_summary",
     description="获取指定文档的摘要信息（标题、类型、大小、分块数等）。",
 )
-@trace_span("mcp", "get_document_summary")
+@trace_span()
 async def get_document_summary(doc_id: str) -> str:
     """获取文档摘要。
 
@@ -95,7 +94,6 @@ async def get_document_summary(doc_id: str) -> str:
     # TODO(E11): 连接 Database 查询实际文档摘要
     logger.info(
         "mcp_doc_summary",
-        event_type="retrieval",
         message="MCP 文档摘要请求",
         metadata={"doc_id": doc_id},
     )

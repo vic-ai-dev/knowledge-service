@@ -29,7 +29,6 @@ class PDFLoader(BaseLoader):
         except Exception as e:
             logger.error(
                 "pdf_load_failed",
-                event_type="retrieval",
                 metadata={"source_path": path_str},
                 error=str(e),
             )
@@ -42,7 +41,6 @@ class PDFLoader(BaseLoader):
 
         logger.info(
             "pdf_load_complete",
-            event_type="retrieval",
             metadata={
                 "source_path": path_str,
                 "title": result.title,

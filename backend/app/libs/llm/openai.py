@@ -112,7 +112,7 @@ class OpenAILLM(BaseLLM):
 
     # ── BaseLLM 接口实现 ──────────────────────────────────────
 
-    @trace_span("llm_call")
+    @trace_span()
     async def generate(
         self,
         prompt: str | None = None,

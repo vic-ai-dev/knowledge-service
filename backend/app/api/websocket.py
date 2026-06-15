@@ -35,7 +35,6 @@ class WebSocketProgressManager:
             self._connections.add(websocket)
         logger.info(
             "ws_connected",
-            event_type="http_request",
             message="WebSocket 客户端已连接",
             metadata={"active_connections": len(self._connections)},
         )
@@ -46,7 +45,6 @@ class WebSocketProgressManager:
             self._connections.discard(websocket)
         logger.info(
             "ws_disconnected",
-            event_type="http_request",
             message="WebSocket 客户端已断开",
             metadata={"active_connections": len(self._connections)},
         )
@@ -120,7 +118,6 @@ async def ingestion_progress_endpoint(websocket: WebSocket) -> None:
     except Exception as e:
         logger.warning(
             "ws_error",
-            event_type="http_request",
             message=f"WebSocket 连接异常: {e}",
         )
     finally:

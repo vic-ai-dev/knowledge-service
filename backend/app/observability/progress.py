@@ -67,7 +67,6 @@ class LoggingProgressCallback:
     def __call__(self, progress: PipelineProgress) -> None:
         self.logger.info(
             "pipeline_progress",
-            event_type="pipeline_progress",
             metadata={
                 "run_id": progress.run_id,
                 "stage": progress.stage.value,

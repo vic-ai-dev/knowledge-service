@@ -99,7 +99,6 @@ class QueryProcessor:
 
         logger.info(
             "query_processed",
-            event_type="query_processing",
             metadata={
                 "search_mode": query.search_mode,
                 "top_k": query.top_k,

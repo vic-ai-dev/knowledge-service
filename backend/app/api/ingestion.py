@@ -70,7 +70,6 @@ async def upload_document(
     # TODO(E5): 提交到 Ingestion Pipeline 异步处理
     logger.info(
         "file_uploaded",
-        event_type="http_request",
         message="文件上传成功",
         metadata={
             "filename": file.filename,

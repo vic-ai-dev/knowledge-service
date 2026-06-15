@@ -59,7 +59,7 @@ class DenseRetriever:
 
     # ── 核心方法 ──────────────────────────────────────────────
 
-    @trace_span("retrieval", "dense_retrieve")
+    @trace_span()
     async def retrieve(
         self,
         query_text: str,
@@ -120,7 +120,6 @@ class DenseRetriever:
 
         logger.info(
             "dense_retrieve_done",
-            event_type="retrieval",
             metadata={
                 "top_k": top_k,
                 "recall_k": recall_k,

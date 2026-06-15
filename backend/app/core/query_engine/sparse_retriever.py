@@ -53,7 +53,7 @@ class SparseRetriever:
 
     # ── 核心方法 ──────────────────────────────────────────────
 
-    @trace_span("retrieval", "sparse_retrieve")
+    @trace_span()
     async def retrieve(
         self,
         query_text: str,
@@ -108,7 +108,6 @@ class SparseRetriever:
 
         logger.info(
             "sparse_retrieve_done",
-            event_type="retrieval",
             metadata={
                 "top_k": top_k,
                 "results": len(chunks),

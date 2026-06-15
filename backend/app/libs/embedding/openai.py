@@ -103,7 +103,7 @@ class OpenAIEmbedding(BaseEmbedding):
 
     # ── BaseEmbedding 接口实现 ──
 
-    @trace_span("embedding")
+    @trace_span()
     async def embed_documents(
         self, texts: list[str], **kwargs: Any
     ) -> EmbeddingResult:
@@ -117,7 +117,7 @@ class OpenAIEmbedding(BaseEmbedding):
             total_tokens=total_tokens,
         )
 
-    @trace_span("embedding", span_name="embed_query")
+    @trace_span(span_name="embed_query")
     async def embed_query(self, text: str, **kwargs: Any) -> list[float]:
         self._validate_query(text)
         response = await self._call_api(self._model, text)

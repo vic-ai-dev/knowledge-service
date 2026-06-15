@@ -26,7 +26,6 @@ async def search(
     # TODO(E6): 连接 QueryPipeline 实现真实检索
     logger.info(
         "api_search",
-        event_type="retrieval",
         message="API 检索请求",
         metadata={"query": query, "search_mode": search_mode, "top_k": top_k},
     )

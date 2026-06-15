@@ -40,6 +40,8 @@ export default function DocumentCenter() {
   const [uploading, setUploading] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [fileList, setFileList] = useState<File[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState('employee_handbook');
+  const [selectedLanguage, setSelectedLanguage] = useState('zh');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -128,7 +130,7 @@ export default function DocumentCenter() {
     }
     setUploading(true);
     try {
-      await uploadFile(fileList[0]);
+      await uploadFile(fileList[0], selectedCategory, selectedLanguage);
       message.success('文件已上传并开始处理（处理即弃）');
       setUploadModalOpen(false);
       setFileList([]);
@@ -296,6 +298,30 @@ export default function DocumentCenter() {
         confirmLoading={uploading}
         okText="上传并处理"
       >
+        <div style={{ marginBottom: 16 }}>
+          <Space wrap>
+            <Select
+              value={selectedCategory}
+              onChange={setSelectedCategory}
+              style={{ width: 140 }}
+              options={[
+                { value: 'employee_handbook', label: '员工手册' },
+                { value: 'compliance', label: '合规指南' },
+                { value: 'technical_spec', label: '技术规范' },
+                { value: 'architecture', label: '架构文档' },
+              ]}
+            />
+            <Select
+              value={selectedLanguage}
+              onChange={setSelectedLanguage}
+              style={{ width: 100 }}
+              options={[
+                { value: 'zh', label: '中文' },
+                { value: 'en', label: 'English' },
+              ]}
+            />
+          </Space>
+        </div>
         <Upload.Dragger {...uploadProps}>
           <p className="ant-upload-drag-icon"><InboxOutlined /></p>
           <p className="ant-upload-text">点击或拖拽文件到此处</p>

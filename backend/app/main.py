@@ -26,7 +26,6 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理。"""
     _logger.info(
         "service_startup",
-        event_type="http_request",
         message="Knowledge Service 正在启动",
     )
 
@@ -40,7 +39,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         _logger.error(
             "db_init_failed",
-            event_type="error",
             error=str(e),
             message="数据库连接池初始化失败，服务将退出",
         )
@@ -57,13 +55,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         _logger.warning(
             "db_close_warning",
-            event_type="http_request",
             message=f"关闭数据库连接时出现异常: {e}",
         )
 
     _logger.info(
         "service_shutdown",
-        event_type="http_request",
         message="Knowledge Service 正在关闭",
     )
 
@@ -104,12 +100,12 @@ def create_app() -> FastAPI:
             trace_id=trace_id or None,
             parent_span_id=parent_span_id or None,
             request_id=request_id,
+            enabled=settings.observability.tracing.enabled,
         ):
             ctx = get_trace_context()
 
             _logger.info(
                 "http_request",
-                event_type="http_request",
                 metadata={
                     "method": request.method,
                     "path": request.url.path,
@@ -124,7 +120,6 @@ def create_app() -> FastAPI:
                 elapsed = time.monotonic() - start
                 _logger.error(
                     "http_error",
-                    event_type="error",
                     error=str(exc),
                     metadata={
                         "method": request.method,
@@ -148,7 +143,6 @@ def create_app() -> FastAPI:
 
             _logger.info(
                 "http_response",
-                event_type="http_response",
                 metadata={
                     "method": request.method,
                     "path": request.url.path,
@@ -185,11 +179,10 @@ def create_app() -> FastAPI:
 
         sse_app = create_mcp_sse_app()
         app.mount("/mcp", sse_app)
-        _logger.info("mcp_mounted", event_type="http_request", message="MCP SSE Transport 已挂载到 /mcp")
+        _logger.info("mcp_mounted", message="MCP SSE Transport 已挂载到 /mcp")
     except Exception as e:
         _logger.warning(
             "mcp_mount_warning",
-            event_type="http_request",
             message=f"MCP SSE 挂载失败，服务仍可运行: {e}",
         )
 
@@ -207,6 +200,7 @@ def main() -> None:
         host="127.0.0.1",
         port=settings.server.port,
         reload=getattr(settings.server, "reload", False),
+        log_config=None,
         access_log=False,
     )
 

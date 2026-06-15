@@ -60,7 +60,7 @@ class MarkdownHeaderSplitter(BaseSplitter):
             for i, doc in enumerate(docs)
         ]
         elapsed = round((time.monotonic() - start) * 1000, 2)
-        logger.info("split_done", event_type="splitting", metadata={
+        logger.info("split_done", metadata={
             "splitter": "MarkdownHeaderSplitter",
             "chunks": len(result),
             "duration_ms": elapsed,
@@ -111,7 +111,7 @@ class HTMLHeaderSplitter(BaseSplitter):
             for i, doc in enumerate(docs)
         ]
         elapsed = round((time.monotonic() - start) * 1000, 2)
-        logger.info("split_done", event_type="splitting", metadata={
+        logger.info("split_done", metadata={
             "splitter": "HTMLHeaderSplitter",
             "chunks": len(result),
             "duration_ms": elapsed,
@@ -162,7 +162,7 @@ class RecursiveCharacterSplitter(BaseSplitter):
             for i, doc in enumerate(docs)
         ]
         elapsed = round((time.monotonic() - start) * 1000, 2)
-        logger.info("split_done", event_type="splitting", metadata={
+        logger.info("split_done", metadata={
             "splitter": "RecursiveCharacterSplitter",
             "chunks": len(result),
             "duration_ms": elapsed,

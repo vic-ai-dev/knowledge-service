@@ -82,7 +82,7 @@ class IngestionPipeline:
 
     # ── 核心方法 ──
 
-    @trace_span("ingestion", "pipeline_process_document")
+    @trace_span()
     async def process_document(
         self,
         doc: IngestionDocument,
@@ -109,7 +109,6 @@ class IngestionPipeline:
                 if not check.should_process:
                     logger.info(
                         "pipeline_skip_duplicate",
-                        event_type="ingestion",
                         metadata={
                             "source_path": doc.source_path,
                             "file_hash": check.file_hash,
@@ -160,7 +159,6 @@ class IngestionPipeline:
                 upserted_count = await self._vector_upserter.upsert(chunks)
                 logger.info(
                     "pipeline_vector_upsert_done",
-                    event_type="ingestion",
                     metadata={
                         "run_id": run_id,
                         "document_id": document_id,
@@ -190,7 +188,6 @@ class IngestionPipeline:
 
         logger.info(
             "pipeline_process_done",
-            event_type="ingestion",
             metadata={
                 "run_id": run_id,
                 "document_id": doc_id_short,
@@ -203,7 +200,7 @@ class IngestionPipeline:
 
         return batch_result
 
-    @trace_span("ingestion", "pipeline_process_batch")
+    @trace_span()
     async def process_batch(
         self,
         documents: list[IngestionDocument],
@@ -220,7 +217,6 @@ class IngestionPipeline:
         for i, doc in enumerate(documents):
             logger.info(
                 "pipeline_batch_progress",
-                event_type="ingestion",
                 metadata={
                     "doc_index": i,
                     "total": len(documents),

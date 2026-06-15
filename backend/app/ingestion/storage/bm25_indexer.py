@@ -105,7 +105,7 @@ class BM25Indexer:
 
     # ── 核心搜索方法 ──
 
-    @trace_span("retrieval", "bm25_search")
+    @trace_span()
     async def search(
         self,
         query: str,
@@ -188,7 +188,7 @@ class BM25Indexer:
 
     # ── 删除方法 ──
 
-    @trace_span("retrieval", "bm25_delete_by_doc_id")
+    @trace_span()
     async def delete_by_doc_id(self, doc_id: str) -> int:
         """按文档 ID 删除全文检索索引记录。
 
@@ -212,7 +212,7 @@ class BM25Indexer:
         parts = result.split()
         return int(parts[-1]) if len(parts) > 1 else 0
 
-    @trace_span("retrieval", "bm25_delete")
+    @trace_span()
     async def delete(self, chunk_ids: list[str]) -> int:
         """按 chunk_id 列表删除全文检索索引记录。
 

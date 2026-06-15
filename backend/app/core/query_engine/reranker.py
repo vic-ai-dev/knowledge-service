@@ -110,7 +110,7 @@ class QueryReranker:
 
     # ── 核心方法 ──────────────────────────────────────────────
 
-    @trace_span("retrieval", "query_rerank")
+    @trace_span()
     async def rerank(
         self,
         query: str,
@@ -158,7 +158,6 @@ class QueryReranker:
 
             logger.info(
                 "query_rerank_done",
-                event_type="retrieval",
                 metadata={
                     "candidates": len(candidates),
                     "final": len(ranked),
@@ -172,7 +171,6 @@ class QueryReranker:
             # 回退到原始排序
             logger.warning(
                 "query_rerank_fallback",
-                event_type="retrieval",
                 metadata={
                     "error": str(e),
                     "fallback": len(candidates),

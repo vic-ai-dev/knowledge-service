@@ -28,7 +28,6 @@ class MarkdownLoader(BaseLoader):
         except Exception as e:
             logger.error(
                 "md_load_failed",
-                event_type="retrieval",
                 metadata={"source_path": path_str},
                 error=str(e),
             )
@@ -40,7 +39,6 @@ class MarkdownLoader(BaseLoader):
 
         logger.info(
             "md_load_complete",
-            event_type="retrieval",
             metadata={
                 "source_path": path_str,
                 "length": len(content),

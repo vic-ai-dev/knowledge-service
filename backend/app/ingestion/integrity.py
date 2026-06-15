@@ -101,7 +101,7 @@ class FileIntegrityChecker:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _compute_sha256_sync, str(path))
 
-    @trace_span("retrieval", "integrity_check")
+    @trace_span()
     async def check_file(self, path: str | Path) -> IntegrityCheckResult:
         """检查文件是否已摄入。
 
@@ -115,7 +115,6 @@ class FileIntegrityChecker:
 
         logger.info(
             "integrity_check",
-            event_type="retrieval",
             metadata={"file_path": path_str, "file_hash": file_hash},
         )
 
@@ -130,7 +129,6 @@ class FileIntegrityChecker:
             if row is None:
                 logger.info(
                     "integrity_check_new",
-                    event_type="retrieval",
                     metadata={"file_path": path_str, "result": "new"},
                 )
                 return IntegrityCheckResult(
@@ -143,7 +141,6 @@ class FileIntegrityChecker:
             if prev_status == "completed":
                 logger.info(
                     "integrity_check_skip",
-                    event_type="retrieval",
                     metadata={
                         "file_path": path_str,
                         "result": "skipped",
@@ -161,7 +158,6 @@ class FileIntegrityChecker:
             # 上次失败 / 未完成 → 允许重新处理
             logger.info(
                 "integrity_check_retry",
-                event_type="retrieval",
                 metadata={
                     "file_path": path_str,
                     "result": "retry",
@@ -176,7 +172,7 @@ class FileIntegrityChecker:
                 message=f"上次状态为 {prev_status}，重新处理",
             )
 
-    @trace_span("retrieval", "integrity_register")
+    @trace_span()
     async def register(
         self,
         source_path: str,
@@ -203,7 +199,6 @@ class FileIntegrityChecker:
 
         logger.info(
             "integrity_register",
-            event_type="retrieval",
             metadata={
                 "run_id": run_id,
                 "file_path": source_path,
@@ -212,7 +207,7 @@ class FileIntegrityChecker:
         )
         return run_id
 
-    @trace_span("retrieval", "integrity_update")
+    @trace_span()
     async def update_status(
         self,
         run_id: str,
@@ -248,7 +243,6 @@ class FileIntegrityChecker:
 
         logger.info(
             "integrity_update",
-            event_type="retrieval",
             metadata={
                 "run_id": run_id,
                 "status": status,
@@ -256,7 +250,7 @@ class FileIntegrityChecker:
             },
         )
 
-    @trace_span("retrieval", "integrity_get_document_id")
+    @trace_span()
     async def get_document_id_by_hash(self, file_hash: str) -> str | None:
         """通过 file_hash 查找已关联的 document_id。"""
         pool = await self._ensure_pool()

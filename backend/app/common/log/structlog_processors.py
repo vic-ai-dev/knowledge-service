@@ -7,20 +7,35 @@ import sys
 from typing import Any
 
 
-def capture_logger_name(
+def set_logger_name(
     logger: logging.Logger,
     method_name: str,
     event_dict: dict[str, Any],
 ) -> dict[str, Any]:
-    """从 _record 提取日志器名称，供 BracketConsoleRenderer 使用。
+    """从 _record 提取日志器名称并添加缩写，供 ConsoleRenderer 列使用。
 
-    必须在 ProcessorFormatter 的处理器链中运行（在 remove_processors_meta 之前），
-    因为 _record 只在包装后的 LogRecord 中可用。
+    logger_name 列会按 Java 包名风格缩写：``app.core.database`` → ``a.c.database``。
+    必须在 ``ProcessorFormatter`` 的处理器链中运行（在 ``remove_processors_meta`` 之前），
+    因为 ``_record`` 只在包装后的 ``LogRecord`` 中可用。
     """
     record = event_dict.get("_record")
     if record is not None:
-        event_dict["_logger_name"] = record.name
+        event_dict["logger_name"] = _abbreviate_name(record.name)
     return event_dict
+
+
+def _abbreviate_name(name: str) -> str:
+    """Java 风格包名缩写，便于快速定位模块。
+
+    Examples:
+        ``app.core.database`` → ``a.c.database``
+        ``app.main``          → ``app.main``
+        ``uvicorn.access``    → ``uvicorn.access``
+    """
+    parts = name.split(".")
+    if len(parts) <= 2:
+        return name
+    return ".".join([p[0] if p else "" for p in parts[:-1]] + [parts[-1]])
 
 
 def auto_exc_info(
@@ -73,8 +88,9 @@ def add_service_name(
 
 
 __all__ = [
-    "capture_logger_name",
+    "set_logger_name",
     "auto_exc_info",
     "add_trace_context",
     "add_service_name",
+    "_abbreviate_name",
 ]
