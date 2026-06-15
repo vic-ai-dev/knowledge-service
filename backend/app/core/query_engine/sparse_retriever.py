@@ -12,7 +12,7 @@ from typing import Any
 from app.core.query_engine.query_types import RankedChunk
 from app.ingestion.storage.bm25_indexer import BM25Indexer
 from app.libs.base.base_vector_store import VectorSearchResult
-from app.observability import get_logger
+from app.common.log import get_logger
 from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)

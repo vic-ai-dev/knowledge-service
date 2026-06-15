@@ -15,7 +15,7 @@ from app.core.query_engine.reranker import QueryReranker
 from app.core.query_engine.rrf_fusion import RRFFusion
 from app.core.query_engine.sparse_retriever import SparseRetriever
 from app.core.types import QueryResult, RetrievalResult
-from app.observability import get_logger
+from app.common.log import get_logger
 from app.observability.instrumentation import trace_span
 from app.observability.progress import (
     NoOpProgressCallback,

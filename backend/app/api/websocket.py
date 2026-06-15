@@ -12,7 +12,7 @@ import json
 from typing import Set
 
 from fastapi import WebSocket, WebSocketDisconnect
-from app.observability import get_logger
+from app.common.log import get_logger
 from app.observability.progress import PipelineProgress, ProgressCallback
 
 logger = get_logger(__name__)

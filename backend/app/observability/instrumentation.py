@@ -14,7 +14,7 @@ import time
 from functools import wraps
 from typing import Any, Callable, TypeVar
 
-from app.observability import get_logger
+from app.common.log import get_logger
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 logger = get_logger("knowledge_service.instrumentation")

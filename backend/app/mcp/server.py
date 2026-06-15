@@ -14,7 +14,7 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 
-from app.observability import get_logger
+from app.common.log import get_logger
 from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)

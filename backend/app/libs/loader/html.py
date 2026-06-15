@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.libs.base.base_loader import BaseLoader, LoadResult
-from app.observability import get_logger
+from app.common.log import get_logger
 
 logger = get_logger(__name__)
 

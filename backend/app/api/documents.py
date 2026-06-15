@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from asyncpg import Connection
 
 from app.core.database import get_kb_conn, get_rag_conn
-from app.observability import get_logger
+from app.common.log import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])

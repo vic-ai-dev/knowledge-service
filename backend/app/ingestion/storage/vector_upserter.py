@@ -13,7 +13,7 @@ from typing import Any
 from app.ingestion.models import ChunkRecord
 from app.libs.base.base_vector_store import BaseVectorStore
 from app.libs.factory import VectorStoreFactory
-from app.observability import get_logger
+from app.common.log import get_logger
 from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)

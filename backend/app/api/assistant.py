@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
-from app.observability import get_logger
+from app.common.log import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/assistant", tags=["assistant"])

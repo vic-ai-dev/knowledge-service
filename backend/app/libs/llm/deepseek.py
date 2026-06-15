@@ -16,7 +16,7 @@ import openai
 from openai import AsyncClient
 
 from app.libs.base.base_llm import BaseLLM, LLMResponse
-from app.observability import get_logger
+from app.common.log import get_logger
 from app.observability.instrumentation import trace_span, log_llm_call
 from app.libs.llm.openai import LLMError
 

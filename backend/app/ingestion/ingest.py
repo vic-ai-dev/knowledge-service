@@ -28,7 +28,7 @@ from pathlib import Path
 
 from app.ingestion.models import IngestionDocument
 from app.ingestion.pipeline import IngestionPipeline
-from app.observability import get_logger
+from app.common.log import get_logger
 
 logger = get_logger("ingest.cli")
 

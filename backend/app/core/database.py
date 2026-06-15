@@ -17,7 +17,7 @@ from typing import AsyncGenerator
 import asyncpg
 
 from app.core.settings import get_settings
-from app.observability import get_logger
+from app.common.log import get_logger
 
 logger = get_logger(__name__)
 

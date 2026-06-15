@@ -60,7 +60,7 @@ class LoggingProgressCallback:
     """日志回调 — 每次进度更新写日志。"""
 
     def __init__(self, logger_name: str | None = None):
-        from app.observability import get_logger
+        from app.common.log import get_logger
 
         self.logger = get_logger(logger_name or "pipeline.progress")
 

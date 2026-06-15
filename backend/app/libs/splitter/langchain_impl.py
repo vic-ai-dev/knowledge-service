@@ -15,7 +15,7 @@ from langchain_text_splitters import (
 from langchain_core.documents import Document
 
 from app.libs.base.base_splitter import BaseSplitter, SplitResult
-from app.observability import get_logger
+from app.common.log import get_logger
 
 logger = get_logger(__name__)
 

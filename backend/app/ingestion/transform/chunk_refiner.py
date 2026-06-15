@@ -15,7 +15,7 @@ from typing import Any
 
 from app.ingestion.models import ChunkRecord
 from app.ingestion.transform.base import BaseTransform, TransformError
-from app.observability import get_logger
+from app.common.log import get_logger
 
 logger = get_logger(__name__)
 

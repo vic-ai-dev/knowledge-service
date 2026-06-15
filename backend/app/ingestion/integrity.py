@@ -21,7 +21,7 @@ import asyncpg
 from app.core.settings import get_settings
 from app.ingestion.models import IngestionStatus
 from app.observability.instrumentation import trace_span
-from app.observability import get_logger
+from app.common.log import get_logger
 
 logger = get_logger(__name__)
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.query_engine.query_types import RetrievalQuery
-from app.observability import get_logger
+from app.common.log import get_logger
 
 logger = get_logger(__name__)
 

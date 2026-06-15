@@ -27,7 +27,7 @@ from app.ingestion.models import (
 from app.ingestion.transform.chunk_refiner import ChunkRefiner
 from app.ingestion.transform.metadata_enricher import MetadataEnricher
 from app.libs.factory import LoaderFactory, SplitterFactory
-from app.observability import get_logger
+from app.common.log import get_logger
 from app.observability.instrumentation import trace_span
 from app.observability.progress import (
     NoOpProgressCallback,

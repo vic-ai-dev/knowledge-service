@@ -14,7 +14,7 @@ import uvicorn
 import app.libs  # noqa: F401
 
 from app.core.settings import get_settings
-from app.observability import setup_structlog, get_logger
+from app.common.log import setup_structlog, get_logger
 from app.core.trace import trace_context, generate_id, get_trace_context
 from app.api.websocket import ingestion_progress_endpoint
 
@@ -206,6 +206,7 @@ def main() -> None:
         host="127.0.0.1",
         port=settings.server.port,
         reload=getattr(settings.server, "reload", False),
+        access_log=False,
     )
 
 
