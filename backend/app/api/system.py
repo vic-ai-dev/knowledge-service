@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from asyncpg import Connection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import get_settings
-from app.core.database import get_kb_conn, get_rag_conn
+from app.core.database_sa import get_kb_session, get_rag_session
+from app.repositories.document_repo import DocumentRepository
+from app.repositories.chunk_repo import DocumentChunkRepository
 from app.common.log import get_logger
 
 logger = get_logger(__name__)
@@ -30,55 +32,25 @@ async def get_config():
 
 @router.get("/system/stats")
 async def get_system_stats(
-    kb_conn: Connection = Depends(get_kb_conn),
-    rag_conn: Connection = Depends(get_rag_conn),
+    kb_session: AsyncSession = Depends(get_kb_session),
+    rag_session: AsyncSession = Depends(get_rag_session),
 ):
     """获取系统统计信息（文档数、分块数等）。"""
-    # 文档总数 + 总大小
-    doc_row = await kb_conn.fetchrow("""
-        SELECT
-            COUNT(*)::int AS total_documents,
-            COALESCE(SUM(file_size), 0)::bigint AS total_size_bytes
-        FROM documents
-        WHERE is_deleted = FALSE
-    """)
-    total_documents = doc_row["total_documents"] if doc_row else 0
-    total_size_bytes = doc_row["total_size_bytes"] if doc_row else 0
+    doc_repo = DocumentRepository(kb_session)
+    chunk_repo = DocumentChunkRepository(rag_session)
 
-    # Chunk 总数
-    chunk_row = await rag_conn.fetchrow("SELECT COUNT(*)::int AS total_chunks FROM document_chunks")
-    total_chunks = chunk_row["total_chunks"] if chunk_row else 0
-
-    # 集合数
-    col_row = await rag_conn.fetchrow("SELECT COUNT(*)::int AS total_collections FROM collections")
-    total_collections = col_row["total_collections"] if col_row else 0
-
-    # 分类统计
-    cat_rows = await kb_conn.fetch("""
-        SELECT category, COUNT(*)::int AS cnt
-        FROM documents
-        WHERE is_deleted = FALSE
-        GROUP BY category
-    """)
-    by_category = {r["category"]: r["cnt"] for r in cat_rows}
-
-    # 语言统计
-    lang_rows = await kb_conn.fetch("""
-        SELECT language, COUNT(*)::int AS cnt
-        FROM documents
-        WHERE is_deleted = FALSE
-        GROUP BY language
-    """)
-    by_language = {r["language"]: r["cnt"] for r in lang_rows}
+    stats = await doc_repo.get_stats()
+    chunk_count = await chunk_repo.get_total_count()
 
     return {
-        "total_documents": total_documents,
-        "total_chunks": total_chunks,
-        "total_collections": total_collections,
-        "total_categories": len(by_category),
-        "total_size_bytes": total_size_bytes,
-        "by_category": by_category,
-        "by_language": by_language,
+        "total_documents": stats["total_documents"],
+        "total_chunks": chunk_count,
+        "total_collections": 0,
+        "total_categories": len(stats["by_category"]),
+        "total_size_bytes": stats["total_size_bytes"],
+        "by_category": stats["by_category"],
+        "by_language": stats["by_language"],
+        "by_type": stats.get("by_type", {}),
     }
 
 

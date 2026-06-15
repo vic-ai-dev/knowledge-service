@@ -8,10 +8,14 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
-from asyncpg import Connection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import get_settings
-from app.core.database import get_kb_conn
+from app.core.database_sa import get_kb_session
+from app.repositories.ingestion_repo import IngestionHistoryRepository, IngestionTraceRepository
+from app.repositories.document_repo import DocumentRepository
+from app.ingestion.models import IngestionDocument
+from app.ingestion.pipeline import IngestionPipeline
 from app.common.log import get_logger
 from app.core.trace import get_trace_context
 import tempfile
@@ -113,8 +117,6 @@ async def upload_document(
     doc_type = _doc_type_from_ext(ext)
     title = Path(file.filename or "untitled").stem
 
-    from app.ingestion.models import IngestionDocument
-
     ingestion_doc = IngestionDocument(
         source_path=str(tmp_path),
         doc_type=doc_type,
@@ -127,8 +129,6 @@ async def upload_document(
     )
 
     # ── 创建 IngestionPipeline ─────────────────────────
-    from app.ingestion.pipeline import IngestionPipeline
-
     pipeline = IngestionPipeline(
         batch_processor=None,
         vector_upserter=None,
@@ -193,116 +193,88 @@ async def upload_document(
 
 @router.get("/history")
 async def list_ingestion_history(
-    kb_conn: Connection = Depends(get_kb_conn),
+    kb_session: AsyncSession = Depends(get_kb_session),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """列出 Ingestion 历史记录（来自 ingestion_history 表）。"""
-    offset = (page - 1) * page_size
-
-    count_row = await kb_conn.fetchrow("SELECT COUNT(*)::int AS cnt FROM ingestion_history")
-    total = count_row["cnt"] if count_row else 0
-
-    rows = await kb_conn.fetch("""
-        SELECT id, file_hash, source_path, file_size, status, category, language,
-               doc_type, total_chunks, error_message, created_at
-        FROM ingestion_history
-       ORDER BY created_at DESC
-        LIMIT $1 OFFSET $2
-   """, page_size, offset)
-
+    repo = IngestionHistoryRepository(kb_session)
+    rows, total = await repo.paginate(page=page, page_size=page_size)
     items = []
     for r in rows:
         items.append({
-            "id": str(r["id"]),
-            "file_hash": r["file_hash"],
-            "file_path": r["source_path"],
-            "file_size": r["file_size"],
-            "status": r["status"],
-            "category": r["category"],
-            "language": r["language"],
-            "doc_type": r["doc_type"],
-            "chunk_count": r["total_chunks"],
-            "error_msg": r["error_message"],
-            "processed_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "id": str(r.id),
+            "file_hash": r.file_hash,
+            "file_path": r.source_path,
+            "file_size": r.file_size,
+            "status": r.status,
+            "category": r.category,
+            "language": r.language,
+            "doc_type": r.doc_type,
+            "chunk_count": r.total_chunks,
+            "error_msg": r.error_message,
+            "processed_at": r.created_at.isoformat() if r.created_at else None,
         })
-
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/traces")
 async def list_ingestion_traces(
-    kb_conn: Connection = Depends(get_kb_conn),
+    kb_session: AsyncSession = Depends(get_kb_session),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """列出 Ingestion 追踪记录（来自 ingestion_traces 表）。"""
-    offset = (page - 1) * page_size
-
-    count_row = await kb_conn.fetchrow("SELECT COUNT(*)::int AS cnt FROM ingestion_traces")
-    total = count_row["cnt"] if count_row else 0
-
-    rows = await kb_conn.fetch("""
-        SELECT trace_id, source_path, collection, total_latency_ms, status,
-               total_chunks, total_images, stages, error, created_at
-        FROM ingestion_traces
-       ORDER BY created_at DESC
-        LIMIT $1 OFFSET $2
-   """, page_size, offset)
-
+    repo = IngestionTraceRepository(kb_session)
+    rows, total = await repo.paginate(page=page, page_size=page_size)
     items = []
     for r in rows:
         items.append({
-            "trace_id": str(r["trace_id"]),
-            "source_path": r["source_path"],
-            "collection": r["collection"],
-            "total_latency_ms": r["total_latency_ms"],
-            "status": r["status"],
-            "total_chunks": r["total_chunks"],
-            "total_images": r["total_images"],
-            "stages": r["stages"] if r["stages"] else {},
-            "error": r["error"],
-            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "trace_id": str(r.trace_id),
+            "source_path": r.source_path,
+            "collection": r.collection,
+            "total_latency_ms": r.total_latency_ms,
+            "status": r.status,
+            "total_chunks": r.total_chunks,
+            "total_images": r.total_images,
+            "stages": r.stages if r.stages else {},
+            "error": r.error,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
         })
-
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/traces/{trace_id}")
 async def get_ingestion_trace(
     trace_id: str,
-    kb_conn: Connection = Depends(get_kb_conn),
+    kb_session: AsyncSession = Depends(get_kb_session),
 ):
     """获取单条 Ingestion 追踪详情。"""
-    row = await kb_conn.fetchrow("""
-        SELECT trace_id, source_path, collection, total_latency_ms, status,
-               total_chunks, total_images, stages, error, created_at
-        FROM ingestion_traces
-        WHERE trace_id = $1::uuid
-    """, trace_id)
-    if not row:
+    repo = IngestionTraceRepository(kb_session)
+    r = await repo.find_by_trace_id(trace_id)
+    if not r:
         raise HTTPException(status_code=404, detail="追踪记录不存在")
 
     return {
-        "trace_id": str(row["trace_id"]),
-        "source_path": row["source_path"],
-        "collection": row["collection"],
-        "total_latency_ms": row["total_latency_ms"],
-        "status": row["status"],
-        "total_chunks": row["total_chunks"],
-        "total_images": row["total_images"],
-        "stages": row["stages"] if row["stages"] else {},
-        "error": row["error"],
-        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "trace_id": str(r.trace_id),
+        "source_path": r.source_path,
+        "collection": r.collection,
+        "total_latency_ms": r.total_latency_ms,
+        "status": r.status,
+        "total_chunks": r.total_chunks,
+        "total_images": r.total_images,
+        "stages": r.stages if r.stages else {},
+        "error": r.error,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
     }
    
 @router.get("/status/{run_id}")
 async def get_ingestion_status(
     run_id: str,
-    kb_conn: Connection = Depends(get_kb_conn),
+    kb_session: AsyncSession = Depends(get_kb_session),
 ):
     """获取 Ingestion 运行状态（与 traces/{trace_id} 同源）。"""
-    return await get_ingestion_trace(run_id, kb_conn)
+    return await get_ingestion_trace(run_id, kb_session)
 
 
 __all__ = ["router"]

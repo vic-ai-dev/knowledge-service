@@ -988,6 +988,55 @@ CREATE INDEX idx_chunks_embedding_hnsw ON document_chunks
 -- 数据变化后需要 REINDEX
 ```
 
+### 3.8 数据持久化层（技术选型）
+
+当前项目使用 **asyncpg** 直接执行原始 SQL 进行所有数据库操作。这种方式的优点是无依赖、性能直接，但长期维护存在以下问题：
+
+| 问题 | 说明 |
+|------|------|
+| **类型安全** | 原始 SQL 的行结果需手动映射为 Python 对象，易出错 |
+| **迁移管理** | 无版本化迁移工具，`init_knowledge_db.sql` 需手动执行，增量变更靠人工 DDL |
+| **可测试性** | 单元测试需连接真实数据库，Mock 层缺失 |
+| **代码组织** | SQL 散落在 API 层、Pipeline 层，职责不清，难以单独维护 |
+
+#### 迁移路线图（两阶段）
+
+**第一阶段：Repository 模式（零额外依赖，优先执行）**
+
+在不动底层 asyncpg 的前提下，将散落在各处的 SQL 抽取到 **Repository 类** 中：
+
+```python
+class DocumentRepository:
+    def __init__(self, pool: asyncpg.Pool):
+        self._pool = pool
+    
+    async def find_by_id(self, doc_id: str) -> DocumentRecord | None: ...
+    async def find_by_hash(self, file_hash: str) -> DocumentRecord | None: ...
+    async def save(self, doc: DocumentRecord) -> None: ...
+    async def delete(self, doc_id: str) -> None: ...
+```
+
+优点：几乎零风险，SQL 逻辑集中化，接口契约化，后续迁移 SQLAlchemy 时只改 Repository 内部实现。
+
+**第二阶段：SQLAlchemy 2.0 async + Alembic**
+
+引入 SQLAlchemy 2.0 async 和 Alembic，完成全链路重写：
+
+| 组件 | 说明 |
+|------|------|
+| `sqlalchemy[asyncio]` | ORM 引擎 + Model 定义 |
+| `asyncpg` | 仍作为 async DB Driver（SQLAlchemy 底层复用 asyncpg） |
+| `alembic` | 数据库迁移管理，替代手动 SQL 脚本 |
+| `pydantic` v2 | 定义 Schema / DTO，分离 ORM 层与 API 层模型 |
+
+SQLAlchemy + Pydantic 的组合效果类似 Spring 的 MyBatis + DTO：
+
+```
+asyncpg SQL（原始） → Repository 类（SQL 集中化） → SQLAlchemy ORM（模型驱动） → Pydantic Schema（API 序列化）
+```
+
+---
+
 ---
 
 ## 4. 测试方案
@@ -1558,6 +1607,58 @@ server:
 2. 确保新后端的依赖已安装、凭据已配置
 3. 重启服务，工厂函数自动加载新实现
 
+### 5.6 数据持久化层设计（Repository 模式 + 迁移路线图）
+
+#### 5.6.1 Repository 接口设计
+
+每个实体对应一个 Repository 类，所有 Repository 遵循统一模式：
+
+| Repository | 对应表 | 核心方法 |
+|-----------|-------|---------|
+| `DocumentRepository` | `documents` | find_by_id / find_by_hash / save / delete / find_all / count |
+| `ChunkRepository` | `document_chunks` | find_by_id / find_by_document / save_batch / delete_by_document |
+| `IngestionHistoryRepository` | `ingestion_history` | find_by_id / find_by_hash / save / update_status / paginate |
+| `TraceRepository` | `ingestion_traces` | find_by_id / save / paginate |
+| `ConversationRepository` | `conversations` | find_by_id / find_by_session / save / delete / paginate |
+
+#### 5.6.2 分层结构
+
+```
+app/
+  repositories/           # Repository 层
+    __init__.py
+    base.py               # 抽象基类（可选的通用 CRUD）
+    document_repo.py
+    chunk_repo.py
+    ingestion_history_repo.py
+    trace_repo.py
+    conversation_repo.py
+  models/                 # ORM 模型（第二阶段引入）
+    __init__.py
+    document.py
+    chunk.py
+    ...
+  schemas/                # Pydantic DTO（第二阶段引入）
+    __init__.py
+    document.py
+    chunk.py
+    ...
+```
+
+#### 5.6.3 迁移策略
+
+| 步骤 | 内容 | 依赖 |
+|------|------|------|
+| **Phase 1** | 抽取 Repository 类封装原始 asyncpg SQL | 零新依赖 |
+| **Phase 1.1** | API 层 + Pipeline 层改用 Repository 接口 | Phase 1 |
+| **Phase 2** | 引入 SQLAlchemy 2.0 async，定义 ORM Model | sqlalchemy |
+| **Phase 2.1** | 逐个 Repository 从 asyncpg 迁移到 SQLAlchemy 2.0 | Phase 2 |
+| **Phase 3** | 引入 Alembic 管理数据库版本迁移 | alembic |
+| **Phase 3.1** | 首次基线迁移（基于当前 schema 生成） | Phase 3 |
+| **Phase 4** | 引入 Pydantic Schema，API 层改用 Schema 序列化 | pydantic v2 |
+
+> **不引入分布式事务**：删除文档功能通过两个 Repository 调用同一个 `delete_document()` 方法确保一致性，跨表操作使用同一个连接上下文。
+
 ---
 
 ## 6. 项目排期
@@ -1589,6 +1690,8 @@ server:
    - 目的：实现 RagasEvaluator + CompositeEvaluator + EvalRunner，启用评估面板页面，建立 golden test set 回归基线。
 9. **阶段 I：端到端验收与文档收口**
    - 目的：补齐 E2E 测试（API 调用模拟 + MCP SSE 连接 + 前端冒烟），完善 README，全链路验收。
+10. **阶段 J：数据持久化层重构（Repository + SQLAlchemy 2.0 + Alembic）**
+   - 目的：分阶段重构持久化层，先从 Repository 模式抽取原始 SQL，再引入 SQLAlchemy 2.0 async + Alembic 迁移 + Pydantic Schema，实现类型安全、可迁移、可测试的数据持久化层。
 
 ---
 
@@ -1730,6 +1833,22 @@ server:
 | I3 | E2E：前端冒烟测试（Playwright） | [ ] | | |
 | I4 | 完善 README（运行说明 + 数据库初始化 + API + MCP + Dashboard） | [ ] | | |
 | I5 | 全链路 E2E 验收 | [ ] | | |
+#### 阶段 J：数据持久化层重构（Repository + SQLAlchemy 2.0 + Alembic）
+
+| 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
+|---------|---------|------|---------|------|
+| J1 | 定义 Repository 抽象基类与通用 CRUD 接口 | [ ] | | base.py（零额外依赖，封装 asyncpg 通用操作） |
+| J2 | 实现 DocumentRepository | [ ] | | 替代散落在 API/Pipeline 中的 documents 表原始 SQL |
+| J3 | 实现 IngestionHistoryRepository | [ ] | | |
+| J4 | 实现 TraceRepository | [ ] | | |
+| J5 | 实现 ConversationRepository | [ ] | | |
+| J6 | API 层 + Pipeline 层切换为 Repository 调用 | [ ] | | 逐个替换，确保行为不变 |
+| J7 | 引入 SQLAlchemy 2.0 async + 定义 ORM 模型 | [ ] | | 按当前 schema 精确映射 |
+| J8 | 逐个 Repository 迁移到 SQLAlchemy 2.0 | [ ] | | 从 asyncpg 底层切换到 SQLAlchemy Core/ORM |
+| J9 | 引入 Alembic，生成首次基线迁移 | [ ] | | 替换 `init_knowledge_db.sql` |
+| J10 | 引入 Pydantic Schema，API 层改用 Schema | [ ] | | 序列化/反序列化解耦 |
+
+---
 
 ---
 
@@ -1746,8 +1865,9 @@ server:
 | 阶段 G | 6 | 6 | 100% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| **总计** | **84** | **70** | **83%** |
-| **有效数** | **81** | **70** | **86%** | 3 项延期不计入有效任务 |
+| 阶段 J | 10 | 0 | 0% |
+| **总计** | **94** | **70** | **74%** |
+| **有效数** | **91** | **70** | **77%** | 3 项延期不计入有效任务 |
 | **延期** | **3** | **—** | **—** | B8 / B9 / C7（Vision 多模态等，待条件成熟后实现） |
 
 

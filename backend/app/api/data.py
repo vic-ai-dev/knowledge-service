@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from asyncpg import Connection
+import uuid
+from datetime import datetime
 
-from app.core.database import get_kb_conn, get_rag_conn
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, delete as sa_delete
+
+from app.core.database_sa import get_kb_session, get_rag_session
+from app.repositories.document_repo import DocumentRepository
+from app.repositories.chunk_repo import DocumentChunkRepository
+from app.repositories.base import BaseRepository
+from app.models.chunk import Collection, DocumentChunk
 from app.common.log import get_logger
 
 logger = get_logger(__name__)
@@ -14,134 +22,90 @@ router = APIRouter(prefix="/data", tags=["data"])
 
 @router.get("/documents")
 async def list_documents(
-    kb_conn: Connection = Depends(get_kb_conn),
-    collection: str = "default",
+    kb_session: AsyncSession = Depends(get_kb_session),
     category: str | None = Query(None),
     language: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """列出知识库文档（分页 + 筛选）。"""
-    where_clauses = ["d.is_deleted = FALSE"]
-    params = []
-    idx = 1
-
-    if category:
-        where_clauses.append(f"d.category = ${idx}")
-        params.append(category)
-        idx += 1
-    if language:
-        where_clauses.append(f"d.language = ${idx}")
-        params.append(language)
-        idx += 1
-
-    where_sql = " AND ".join(where_clauses)
-    offset = (page - 1) * page_size
-
-    count_row = await kb_conn.fetchrow(f"SELECT COUNT(*)::int AS cnt FROM documents d WHERE {where_sql}", *params)
-    total = count_row["cnt"] if count_row else 0
-
-    params.extend([page_size, offset])
-    rows = await kb_conn.fetch(f"""
-        SELECT d.id, d.source_path, d.title, d.collection, d.category, d.language,
-               d.doc_type, d.file_size, d.file_hash, d.chunk_count, d.image_count,
-               d.ingested_at, d.updated_at, d.is_deleted
-        FROM documents d
-        WHERE {where_sql}
-        ORDER BY d.ingested_at DESC
-        LIMIT ${idx} OFFSET ${idx + 1}
-    """, *params)
-
+    repo = DocumentRepository(kb_session)
+    rows, total = await repo.find_all_active(
+        category=category,
+        language=language,
+        page=page,
+        page_size=page_size,
+    )
     items = []
-    for r in rows:
+    for d in rows:
         items.append({
-            "id": str(r["id"]),
-            "source_path": r["source_path"],
-            "title": r["title"],
-            "collection": r["collection"],
-            "category": r["category"],
-            "language": r["language"],
-            "doc_type": r["doc_type"],
-            "file_size": r["file_size"],
-            "chunk_count": r["chunk_count"],
-            "ingested_at": r["ingested_at"].isoformat() if r["ingested_at"] else None,
-            "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
-            "is_deleted": r["is_deleted"],
+            "id": str(d.id),
+            "source_path": d.source_path,
+            "title": d.title,
+            "collection": d.collection,
+            "category": d.category,
+            "language": d.language,
+            "doc_type": d.doc_type,
+            "file_size": d.file_size,
+            "chunk_count": d.chunk_count,
+            "ingested_at": d.ingested_at.isoformat() if d.ingested_at else None,
+            "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+            "is_deleted": d.is_deleted,
         })
-
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/chunks")
 async def list_chunks(
-    rag_conn: Connection = Depends(get_rag_conn),
+    rag_session: AsyncSession = Depends(get_rag_session),
     doc_id: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """列出文档分块。"""
-    where_clauses = []
-    params = []
-    idx = 1
-
+    repo = DocumentChunkRepository(rag_session)
     if doc_id:
-        where_clauses.append(f"c.doc_id = ${idx}::uuid")
-        params.append(doc_id)
-        idx += 1
-
-    where_sql = " AND ".join(where_clauses) if where_clauses else "TRUE"
-    offset = (page - 1) * page_size
-
-    count_row = await rag_conn.fetchrow(f"SELECT COUNT(*)::int AS cnt FROM document_chunks c WHERE {where_sql}", *params)
-    total = count_row["cnt"] if count_row else 0
-
-    params.extend([page_size, offset])
-    rows = await rag_conn.fetch(f"""
-        SELECT c.id, c.doc_id, c.chunk_index, c.text, c.metadata, c.source_path,
-               c.token_count, c.created_at
-        FROM document_chunks c
-        WHERE {where_sql}
-        ORDER BY c.chunk_index ASC
-        LIMIT ${idx} OFFSET ${idx + 1}
-    """, *params)
+        rows, total = await repo.find_by_document(doc_id, page=page, page_size=page_size)
+    else:
+        total = await repo.get_total_count()
+        offset = (page - 1) * page_size
+        rows = await repo.find_all(order_by=DocumentChunk.chunk_index, limit=page_size, offset=offset)
 
     items = []
-    for r in rows:
+    for c in rows:
         items.append({
-            "id": str(r["id"]),
-            "doc_id": str(r["doc_id"]) if r["doc_id"] else None,
-            "chunk_index": r["chunk_index"],
-            "text": r["text"],
-            "metadata": r["metadata"] if r["metadata"] else {},
-            "source_path": r["source_path"],
-            "token_count": r["token_count"],
-            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "id": str(c.id),
+            "doc_id": str(c.doc_id) if c.doc_id else None,
+            "chunk_index": c.chunk_index,
+            "text": c.text,
+            "metadata": c.metadata if c.metadata else {},
+            "source_path": c.source_path,
+            "token_count": c.token_count,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
         })
-
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/collections")
 async def list_collections(
-    rag_conn: Connection = Depends(get_rag_conn),
+    rag_session: AsyncSession = Depends(get_rag_session),
 ):
     """列出所有集合。"""
-    rows = await rag_conn.fetch("""
-        SELECT c.id, c.name, c.description, c.document_count, c.chunk_count,
-               c.created_at, c.updated_at
-        FROM collections c
-        ORDER BY c.created_at DESC
-    """)
+    session = rag_session
+    result = await session.execute(
+        select(Collection).order_by(Collection.created_at.desc())
+    )
+    rows = result.scalars().all()
     collections = []
-    for r in rows:
+    for c in rows:
         collections.append({
-            "id": str(r["id"]),
-            "name": r["name"],
-            "description": r["description"],
-            "document_count": r["document_count"],
-            "chunk_count": r["chunk_count"],
-            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-            "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+            "id": str(c.id),
+            "name": c.name,
+            "description": c.description,
+            "document_count": c.document_count,
+            "chunk_count": c.chunk_count,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "updated_at": c.updated_at.isoformat() if c.updated_at else None,
         })
     return {"collections": collections}
 
@@ -165,13 +129,10 @@ async def list_languages():
     return {"languages": [{"id": "zh", "name": "中文"}, {"id": "en", "name": "英文"}]}
 
 
-__all__ = ["router"]
-
-
 @router.post("/collections")
 async def create_collection(
     body: dict,
-    rag_conn: Connection = Depends(get_rag_conn),
+    rag_session: AsyncSession = Depends(get_rag_session),
 ):
     """创建新的集合。"""
     name = body.get("name", "").strip()
@@ -179,40 +140,42 @@ async def create_collection(
         raise HTTPException(status_code=400, detail="集合名称不能为空")
 
     description = body.get("description", "").strip()
-    from uuid import uuid4
-    col_id = uuid4()
-
-    await rag_conn.execute(
-        "INSERT INTO collections (id, name, description) VALUES ($1::uuid, $2, $3)",
-        col_id, name, description,
-    )
+    col = Collection(name=name, description=description)
+    rag_session.add(col)
+    await rag_session.flush()
+    await rag_session.commit()
 
     logger.info(
         "collection_created",
         message="集合已创建",
         metadata={"name": name, "description": description},
     )
-    return {"status": "created", "id": str(col_id), "name": name}
+    return {"status": "created", "id": str(col.id), "name": name}
 
 
 @router.delete("/collections/{name}")
 async def delete_collection(
     name: str,
-    rag_conn: Connection = Depends(get_rag_conn),
+    rag_session: AsyncSession = Depends(get_rag_session),
 ):
     """删除指定集合。"""
-    row = await rag_conn.fetchrow("SELECT id FROM collections WHERE name = $1", name)
-    if not row:
+    session = rag_session
+    result = await session.execute(
+        select(Collection).where(Collection.name == name)
+    )
+    col = result.scalar_one_or_none()
+    if not col:
         raise HTTPException(status_code=404, detail="集合不存在")
 
-    col_id = row["id"]
-
-    # 删除集合下所有 chunks
-    await rag_conn.execute(
-        "DELETE FROM document_chunks WHERE doc_id IN (SELECT id FROM documents WHERE collection = $1)",
-        name,
+    await session.execute(
+        sa_delete(DocumentChunk).where(
+            DocumentChunk.doc_id.in_(
+                select(DocumentChunk.doc_id).where(DocumentChunk.collection == name)
+            )
+        )
     )
-    await rag_conn.execute("DELETE FROM collections WHERE id = $1::uuid", col_id)
+    await session.delete(col)
+    await session.commit()
 
     logger.info(
         "collection_deleted",
@@ -225,24 +188,21 @@ async def delete_collection(
 @router.get("/chunks/{chunk_id}")
 async def get_chunk(
     chunk_id: str,
-    rag_conn: Connection = Depends(get_rag_conn),
+    rag_session: AsyncSession = Depends(get_rag_session),
 ):
     """获取单个分块详情。"""
-    row = await rag_conn.fetchrow(
-        "SELECT id, doc_id, chunk_index, text, metadata, source_path, token_count, created_at "
-        "FROM document_chunks WHERE id = $1::uuid",
-        chunk_id,
-    )
-    if not row:
+    repo = DocumentChunkRepository(rag_session)
+    c = await repo.find_by_id(chunk_id)
+    if not c:
         raise HTTPException(status_code=404, detail="Chunk 不存在")
 
     return {
-        "id": str(row["id"]),
-        "doc_id": str(row["doc_id"]) if row["doc_id"] else None,
-        "chunk_index": row["chunk_index"],
-        "text": row["text"],
-        "metadata": row["metadata"] if row["metadata"] else {},
-        "source_path": row["source_path"],
-        "token_count": row["token_count"],
-        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "id": str(c.id),
+        "doc_id": str(c.doc_id) if c.doc_id else None,
+        "chunk_index": c.chunk_index,
+        "text": c.text,
+        "metadata": c.metadata if c.metadata else {},
+        "source_path": c.source_path,
+        "token_count": c.token_count,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
     }
