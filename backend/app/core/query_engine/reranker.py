@@ -97,7 +97,6 @@ class QueryReranker:
             rerank_score=result.score,
             source_path=original.source_path if original else None,
             doc_id=original.doc_id if original else None,
-            collection=original.collection if original else "default",
             category=original.category if original else None,
             language=original.language if original else None,
             doc_type=original.doc_type if original else None,

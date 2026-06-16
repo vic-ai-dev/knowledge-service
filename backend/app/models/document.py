@@ -20,7 +20,6 @@ class Document(KnowledgeBase):
     )
     source_path: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str | None] = mapped_column(String, nullable=True)
-    collection: Mapped[str] = mapped_column(String, default="default")
     category: Mapped[str] = mapped_column(
         String,
         nullable=False,

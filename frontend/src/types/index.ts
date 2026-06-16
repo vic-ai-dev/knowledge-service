@@ -14,7 +14,6 @@ export interface DocumentInfo {
   id: string;
   source_path: string;
   title?: string;
-  collection: string;
   category: Category;
   language: Language;
   doc_type: DocType;
@@ -37,15 +36,6 @@ export interface ChunkRecord {
   created_at: string;
 }
 
-export interface Collection {
-  id: string;
-  name: string;
-  description?: string;
-  document_count: number;
-  chunk_count: number;
-  created_at: string;
-  updated_at: string;
-}
 
 // ── 摄取 ──────────────────────────────────────────────────
 
@@ -81,7 +71,6 @@ export interface IngestionHistoryItem {
 export interface IngestionTrace {
   trace_id: string;
   source_path: string;
-  collection: string;
   total_latency_ms: number;
   status: IngestionStatus;
   total_chunks: number;
@@ -120,7 +109,6 @@ export interface QueryResult {
 export interface QueryTrace {
   trace_id: string;
   user_query: string;
-  collection: string;
   category?: Category;
   language?: Language;
   total_latency_ms: number;
@@ -176,7 +164,6 @@ export interface Conversation {
   id: string;
   title: string;
   model: string;
-  collection: string;
   message_count: number;
   created_at: string;
   updated_at: string;
@@ -215,7 +202,6 @@ export interface SystemConfig {
 export interface SystemStats {
   total_documents: number;
   total_chunks: number;
-  total_collections: number;
   total_categories: number;
   total_size_bytes: number;
   by_category: Record<string, number>;
@@ -232,9 +218,6 @@ export interface PaginatedResponse<T> {
 }
 
 // ── Collection wrapper ──────────────────────────────────────
-export interface CollectionsResponse {
-  collections: Collection[];
-}
 
 // ── Category & Language types ──────────────────────────────
 export interface CategoryItem {

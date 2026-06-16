@@ -19,7 +19,6 @@ class IngestionDocument:
     title: str | None = None
     file_size: int | None = None
     file_hash: str | None = None
-    collection: str = "default"
     metadata: dict[str, Any] = field(default_factory=dict)
     text: str | None = None  # 加载后的原始文本
 
@@ -41,7 +40,6 @@ class ChunkRecord:
     category: str | None = None
     language: str | None = None
     doc_type: str | None = None
-    collection: str = "default"
 
 
 @dataclass

@@ -117,7 +117,6 @@ class BatchProcessor:
             },
             chunk_index=sr.chunk_index,
             source_path=doc.source_path,
-            collection=doc.collection,
             category=doc.category,
             language=doc.language,
             doc_type=doc.doc_type,
@@ -168,9 +167,8 @@ class BatchProcessor:
 
             loader = LoaderFactory.create(doc.doc_type)
             if doc.text:
-                # 文本已提供，不做加载
-                load_results = []
                 from app.libs.base.base_loader import LoadResult
+                load_results = []
                 load_results.append(LoadResult(
                     text=doc.text,
                     metadata=dict(doc.metadata),
@@ -178,6 +176,9 @@ class BatchProcessor:
                 ))
             else:
                 load_results = await loader.load(doc.source_path)
+                logger.info("📄 Stage 2: Document Loading")
+                logger.info(f"  Text length: {sum(len(lr.text) for lr in load_results)} chars")
+                logger.info(f"  Source: {doc.source_path}")
 
             self._record_stage(
                 result, "load",
@@ -199,6 +200,11 @@ class BatchProcessor:
             for lr in load_results:
                 splits = splitter.split(lr.text, metadata=lr.metadata)
                 split_results.extend(splits)
+
+            logger.info("✂️  Stage 3: Document Chunking")
+            logger.info(f"  Chunks generated: {len(split_results)}")
+            if split_results:
+                logger.info(f"  First chunk preview: {split_results[0].text[:120]}...")
 
             self._record_stage(
                 result, "split",
@@ -225,10 +231,14 @@ class BatchProcessor:
                 total=len(chunks),
             ))
 
+            logger.info("🔄 Stage 4: Transform Pipeline")
+            logger.info("  4a. Chunk Refinement...")
             chunks = await self._chunk_refiner(chunks)
+            logger.info(f"      Refined {len(chunks)} chunks")
+
+            logger.info("  4b. Metadata Enrichment...")
             document_meta = {
                 "source_path": doc.source_path,
-                "collection": doc.collection,
                 "category": doc.category,
                 "language": doc.language,
                 "doc_type": doc.doc_type,
@@ -237,6 +247,7 @@ class BatchProcessor:
             chunks = await self._metadata_enricher(
                 chunks, document_meta=document_meta,
             )
+            logger.info(f"      Enriched {len(chunks)} chunks")
 
             self._record_stage(
                 result, "transform",
@@ -254,7 +265,14 @@ class BatchProcessor:
                 total=len(chunks),
             ))
 
+            logger.info("🔢 Stage 5: Encoding")
             chunks = await self._dense_encoder.encode(chunks)
+
+            if chunks and hasattr(chunks[0], 'embedding') and chunks[0].embedding:
+                dim = len(chunks[0].embedding)
+                logger.info(f"  Dense vectors: {len(chunks)} (dim={dim})")
+            else:
+                logger.info(f"  Dense vectors: {len(chunks)}")
 
             self._record_stage(
                 result, "embed",
@@ -275,15 +293,7 @@ class BatchProcessor:
                 total=len(chunks),
             ))
 
-            logger.info(
-                "batch_processor_done",
-                metadata={
-                    "run_id": run_id,
-                    "source_path": doc.source_path,
-                    "chunks": len(chunks),
-                    "stages": [s.stage for s in result.stages],
-                },
-            )
+            logger.info("✓ Batch processing complete", chunks=len(chunks))
 
         except Exception as e:
             result.status = IngestionStatus.FAILED
@@ -294,11 +304,7 @@ class BatchProcessor:
                 progress=1.0,
                 message=f"Failed: {e}",
             ))
-            logger.error(
-                "batch_processor_error",
-                error=str(e),
-                metadata={"run_id": run_id, "source_path": doc.source_path},
-            )
+            logger.error(f"  ✗ Batch processing failed: {e}")
 
         return result
 

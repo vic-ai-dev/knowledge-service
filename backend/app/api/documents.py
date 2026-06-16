@@ -30,7 +30,6 @@ def _doc_to_response(doc: Document) -> dict:
         id=str(doc.id),
         source_path=doc.source_path,
         title=doc.title,
-        collection=doc.collection,
         category=doc.category,
         language=doc.language,
         doc_type=doc.doc_type,
@@ -47,7 +46,6 @@ def _doc_to_response(doc: Document) -> dict:
 @router.get("", response_model=DocumentListResponse)
 async def list_documents(
     kb_session: AsyncSession = Depends(get_kb_session),
-    collection: str | None = Query(None),
     category: str | None = Query(None),
     language: str | None = Query(None),
     page: int = Query(1, ge=1),
@@ -56,7 +54,6 @@ async def list_documents(
     """文档中心 — 文档库列表。"""
     repo = DocumentRepository(kb_session)
     rows, total = await repo.find_all_active(
-        collection=collection,
         category=category,
         language=language,
         page=page,
@@ -96,7 +93,7 @@ async def get_document_chunks(
             "doc_id": str(c.doc_id) if c.doc_id else None,
             "chunk_index": c.chunk_index,
             "text": c.text,
-            "metadata": c.metadata if c.metadata else {},
+            "metadata": c.metadata_ if c.metadata_ else {},
             "source_path": c.source_path,
             "token_count": c.token_count,
             "created_at": c.created_at.isoformat() if c.created_at else None,

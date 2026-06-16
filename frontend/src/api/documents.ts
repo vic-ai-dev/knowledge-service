@@ -1,5 +1,5 @@
 import apiClient, { unwrapPaginated } from './client';
-import type { DocumentInfo, ChunkRecord, Collection, CollectionsResponse, CategoriesResponse, LanguagesResponse } from '../types';
+import type { DocumentInfo, ChunkRecord, CategoriesResponse, LanguagesResponse } from '../types';
 
 export const listDocuments = (params?: {
   category?: string;

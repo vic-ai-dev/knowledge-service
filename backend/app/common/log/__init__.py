@@ -32,14 +32,38 @@ from structlog.dev import (
 )
 
 
+# ── console timestamp formatter ─────────────────────────
+
+def _format_timestamp_to_local(
+    logger: logging.Logger,
+    method_name: str,
+    event_dict: dict[str, Any],
+) -> dict[str, Any]:
+    """将 ISO UTC 时间戳转为本地时间（逗号毫秒），仅用于 Console 输出。
+
+    原始: 2026-06-16T09:01:34.122363Z
+    输出: 2026-06-16 18:01:00,163
+    """
+    ts = event_dict.get("timestamp")
+    if ts and isinstance(ts, str):
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone()
+            ms = dt.microsecond // 1000
+            event_dict["timestamp"] = dt.strftime("%Y-%m-%d %H:%M:%S") + f",{ms:03d}"
+        except Exception:
+            pass
+    return event_dict
+
+
 # ── setup_structlog ──────────────────────────────────────
 
 
 def _build_columns(*, tracing_enabled: bool = True) -> list[Column]:
     """构建 ConsoleRenderer 的自定义列。
 
-    格式:  [timestamp] [level] [logger] [trace_id] [span_id] [request_id] event …
-    剩余字段渲染为 key=value 对。
+    参考格式:  timestamp LEVEL logger [trace_id] [span_id] [request_id] event key=value
+    例如:      2026-06-16 18:01:00,163 INFO app.ingestion.pipeline ✓ File loaded  chunks=4
 
     当 tracing_enabled=False 时，省略 trace_id / span_id / request_id 列。
     """
@@ -65,22 +89,34 @@ def _build_columns(*, tracing_enabled: bool = True) -> list[Column]:
         )
 
     columns: list[Column] = [
-        _col("timestamp", styles.timestamp, prefix="[", postfix="]"),
+        # "2026-06-16 18:01:00,163 "
+        _col("timestamp", styles.timestamp, prefix="", postfix=" "),
+        # "INFO "  (5-char pad, no brackets)
+        # Render level as styled uppercase string with trailing space
         Column(
             "level",
-            LogLevelColumnFormatter(level_styles, reset_style=styles.reset),
+            KeyValueColumnFormatter(
+                key_style=None,
+                value_style=styles.bright,  # Will be overridden per level by processor
+                reset_style=styles.reset,
+                value_repr=str.upper,
+                prefix="",
+                postfix=" ",
+            ),
         ),
-        _col("logger_name", styles.bright + styles.logger_name, prefix="[", postfix="]"),
-        _col("event", styles.bright),
-
+        # "app.ingestion.pipeline "
+        _col("logger_name", styles.bright + styles.logger_name, prefix="", postfix=" "),
     ]
 
     if tracing_enabled:
-        columns[3:3] = [
-            _col("trace_id", styles.bright, prefix="[", postfix="]"),
-            _col("span_id", styles.bright, prefix="[", postfix="]"),
-            _col("request_id", styles.bright, prefix="[", postfix="]"),
-        ]
+        columns.extend([
+            _col("trace_id", styles.bright, prefix="[", postfix="] "),
+            _col("span_id", styles.bright, prefix="[", postfix="] "),
+            _col("request_id", styles.bright, prefix="[", postfix="] "),
+        ])
+
+    # Event/message — the primary log content (natural language)
+    columns.append(_col("event", styles.bright, prefix="", postfix=""))
 
     # Default column: handles all remaining key=value pairs
     columns.append(
@@ -143,9 +179,22 @@ def setup_structlog() -> None:
     )
 
     # -- Console 输出格式化器（列格式） --
+    def _style_level_for_console(logger, method_name, event_dict):
+        """Style the level field with ansi codes for console display."""
+        from structlog.dev import ConsoleRenderer
+        level = event_dict.get("level", "")
+        if level:
+            _styles = ConsoleRenderer.get_default_level_styles(colors=True)
+            _reset = ConsoleRenderer.get_default_column_styles(colors=True).reset
+            style = _styles.get(level.lower(), "")
+            event_dict["level"] = f"{style}{level.upper()}{_reset}"
+        return event_dict
+
     console_formatter = structlog.stdlib.ProcessorFormatter(
         processors=[
             set_logger_name,
+            _format_timestamp_to_local,
+            _style_level_for_console,
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             ConsoleRenderer(columns=_build_columns(tracing_enabled=tracing_enabled)),
         ],

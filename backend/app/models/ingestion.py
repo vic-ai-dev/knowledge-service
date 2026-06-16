@@ -53,7 +53,6 @@ class IngestionTrace(KnowledgeBase):
         UUID(as_uuid=True), primary_key=True
     )
     source_path: Mapped[str] = mapped_column(Text, nullable=False)
-    collection: Mapped[str] = mapped_column(String, default="default")
     total_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str | None] = mapped_column(
         String, nullable=True, comment="success / failed"

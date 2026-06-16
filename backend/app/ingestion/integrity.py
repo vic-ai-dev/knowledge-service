@@ -94,7 +94,6 @@ class FileIntegrityChecker:
         document_id: str,
         source_path: str,
         title: str | None = None,
-        collection: str = "default",
         category: str = Category.TECHNICAL_SPEC.value,
         language: str = Language.ZH.value,
         doc_type: str = DocType.MD.value,
@@ -110,7 +109,7 @@ class FileIntegrityChecker:
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO documents
-                   (id, source_path, title, collection, category, language,
+                   (id, source_path, title, category, language,
                     doc_type, file_size, file_hash, chunk_count)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                    ON CONFLICT (file_hash) DO UPDATE SET
@@ -265,7 +264,6 @@ class FileIntegrityChecker:
     async def record_ingestion_trace(
         self,
         source_path: str,
-        collection: str,
         total_latency_ms: float = 0.0,
         status: str = "",
         total_chunks: int = 0,
@@ -280,7 +278,7 @@ class FileIntegrityChecker:
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO ingestion_traces
-                   (trace_id, source_path, collection, total_latency_ms, status,
+                   (trace_id, source_path, total_latency_ms, status,
                     total_chunks, total_images, stages, error)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)""",
                 trace_id,

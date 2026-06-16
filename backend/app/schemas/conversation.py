@@ -13,7 +13,6 @@ class ConversationResponse(BaseModel):
     id: str
     title: str
     model: str = "default"
-    collection: str = "default"
     category: str | None = None
     language: str | None = None
     message_count: int = 0

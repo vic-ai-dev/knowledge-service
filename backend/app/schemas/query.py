@@ -11,7 +11,6 @@ class QueryTraceResponse(BaseModel):
 
     trace_id: str
     user_query: str
-    collection: str = "default"
     category: str | None = None
     language: str | None = None
     total_latency_ms: int | None = None

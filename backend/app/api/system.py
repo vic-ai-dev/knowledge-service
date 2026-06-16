@@ -45,7 +45,6 @@ async def get_system_stats(
     return {
         "total_documents": stats["total_documents"],
         "total_chunks": chunk_count,
-        "total_collections": 0,
         "total_categories": len(stats["by_category"]),
         "total_size_bytes": stats["total_size_bytes"],
         "by_category": stats["by_category"],

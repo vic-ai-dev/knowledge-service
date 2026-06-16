@@ -98,7 +98,6 @@ class SparseRetriever:
                 score=r.score,
                 source_path=r.source_path,
                 doc_id=r.doc_id,
-                collection=r.collection,
                 category=r.category,
                 language=r.language,
                 doc_type=r.doc_type,

@@ -25,7 +25,6 @@ async def search(
     search_mode: str = Query(SearchMode.HYBRID.value),
     top_k: int = Query(10, ge=1, le=50),
     rerank: bool = True,
-    collection: str | None = None,
     category: str | None = None,
     language: str | None = None,
 ):
@@ -59,7 +58,6 @@ async def list_query_traces(
         items.append(QueryTraceResponse(
             trace_id=str(r.trace_id),
             user_query=r.user_query,
-            collection=r.collection,
             category=r.category,
             language=r.language,
             total_latency_ms=r.total_latency_ms,
@@ -106,7 +104,6 @@ async def get_query_trace(
     return QueryTraceResponse(
         trace_id=str(r.trace_id),
         user_query=r.user_query,
-        collection=r.collection,
         category=r.category,
         language=r.language,
         total_latency_ms=r.total_latency_ms,

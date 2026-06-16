@@ -68,7 +68,6 @@ def _doc_type_from_ext(ext: str) -> str:
 @router.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    collection: str = Form("default"),
     category: str = Form(""),
     language: str = Form(""),
 ):
@@ -97,7 +96,6 @@ async def upload_document(
             "size": info["size"],
             "type": info["extension"],
             "sha256": info["sha256"],
-            "collection": collection,
             "category": category,
             "language": language,
         },
@@ -122,7 +120,6 @@ async def upload_document(
     ingestion_doc = IngestionDocument(
         source_path=str(tmp_path),
         doc_type=doc_type,
-        collection=collection,
         category=category,
         language=language,
         title=title,
@@ -234,7 +231,6 @@ async def list_ingestion_traces(
         items.append({
             "trace_id": str(r.trace_id),
             "source_path": r.source_path,
-            "collection": r.collection,
             "total_latency_ms": r.total_latency_ms,
             "status": r.status,
             "total_chunks": r.total_chunks,
@@ -260,7 +256,6 @@ async def get_ingestion_trace(
     return {
         "trace_id": str(r.trace_id),
         "source_path": r.source_path,
-        "collection": r.collection,
         "total_latency_ms": r.total_latency_ms,
         "status": r.status,
         "total_chunks": r.total_chunks,

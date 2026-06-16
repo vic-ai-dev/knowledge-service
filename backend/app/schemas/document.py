@@ -15,7 +15,6 @@ class DocumentResponse(BaseModel):
     id: str
     source_path: str
     title: str | None = None
-    collection: str = "default"
     category: str
     language: str
     doc_type: str
@@ -33,7 +32,6 @@ class DocumentUpdate(BaseModel):
     title: str | None = None
     category: str | None = None
     language: str | None = None
-    collection: str | None = None
 
 
 class DocumentListResponse(BaseModel):
@@ -48,7 +46,7 @@ class DocumentStatsResponse(BaseModel):
     """文档统计返回体。"""
     total_documents: int = 0
     total_chunks: int = 0
-    total_collections: int = 0
+    total_categories: int = 0
     total_categories: int = 0
     total_size_bytes: int = 0
     by_category: dict[str, int] = Field(default_factory=dict)

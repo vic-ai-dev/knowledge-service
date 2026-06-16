@@ -31,15 +31,12 @@ class DocumentRepository(BaseRepository[Document]):
 
     async def find_all_active(
         self,
-        collection: str | None = None,
         category: str | None = None,
         language: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[Document], int]:
         filters = [Document.is_deleted == False]
-        if collection:
-            filters.append(Document.collection == collection)
         if category:
             filters.append(Document.category == category)
         if language:

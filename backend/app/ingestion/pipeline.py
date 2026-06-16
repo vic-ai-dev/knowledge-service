@@ -100,27 +100,33 @@ class IngestionPipeline:
         """
         self._validate_document(doc)
 
+        # ── Start ──
+        logger.info("=" * 60)
+        logger.info(f"Starting Ingestion Pipeline for: {doc.source_path}")
+        logger.info(f"  Collection: {doc.collection}")
+        logger.info(f"  Category: {doc.category}")
+        logger.info(f"  Language: {doc.language}")
+        logger.info(f"  Doc type: {doc.doc_type}")
+        logger.info("=" * 60)
+
         # ── 1. 完整性检查 ──────────────────────────────────
+        logger.info("")
+        logger.info("📋 Stage 1: File Integrity Check")
         if not force and doc.source_path:
             path = Path(doc.source_path)
             if path.exists():
                 check: IntegrityCheckResult = await self._integrity.check_file(
                     path
                 )
+                logger.info(f"  File hash: {check.file_hash}")
                 if not check.should_process:
-                    logger.info(
-                        "pipeline_skip_duplicate",
-                        metadata={
-                            "source_path": doc.source_path,
-                            "file_hash": check.file_hash,
-                            "message": check.message,
-                        },
-                    )
+                    logger.info(f"  ⏭ {check.message}")
                     return IngestionResult(
                         source_path=doc.source_path,
                         status=IngestionStatus.SKIPPED,
                         total_chunks=0,
                     )
+                logger.info("  ✓ File needs processing")
                 doc.file_hash = check.file_hash
 
         # ── 2. 生成文档 ID 并注册 ──────────────────────────
@@ -147,6 +153,7 @@ class IngestionPipeline:
         )
 
         if batch_result.status != IngestionStatus.COMPLETED:
+            logger.info(f"  ✗ Processing failed: {'; '.join(batch_result.errors)}")
             # 更新数据库状态为失败
             if doc.source_path:
                 await self._integrity.update_status(
@@ -165,19 +172,13 @@ class IngestionPipeline:
             chunk.document_id = document_id
 
         # ── 4. VectorUpserter 写入 pgvector ─────────────────
+        logger.info("💾 Stage 6: Storage")
         if chunks:
             try:
                 upserted_count = await self._vector_upserter.upsert(chunks)
-                logger.info(
-                    "pipeline_vector_upsert_done",
-                    metadata={
-                        "run_id": run_id,
-                        "document_id": document_id,
-                        "upserted": upserted_count,
-                        "total_chunks": len(chunks),
-                    },
-                )
+                logger.info(f"  ✓ Stored {upserted_count} vectors")
             except Exception as e:
+                logger.info(f"  ✗ Vector upsert failed: {e}")
                 batch_result.status = IngestionStatus.FAILED
                 batch_result.errors.append(f"vector_upsert failed: {e}")
                 if doc.source_path:
@@ -198,7 +199,6 @@ class IngestionPipeline:
                     document_id=document_id,
                     source_path=doc.source_path,
                     title=doc.title,
-                    collection=doc.collection,
                     category=doc.category,
                     language=doc.language or "",
                     doc_type=doc.doc_type,
@@ -206,14 +206,7 @@ class IngestionPipeline:
                     file_hash=doc.file_hash or "",
                     chunk_count=len(chunks),
                 )
-                logger.info(
-                    "pipeline_document_registered",
-                    metadata={
-                        "document_id": document_id,
-                        "source_path": doc.source_path,
-                        "chunk_count": len(chunks),
-                    },
-                )
+                logger.info("  ✓ Document metadata registered", chunk_count=len(chunks))
             except Exception as e:
                 logger.warning(
                     "pipeline_document_register_warn",
@@ -234,21 +227,13 @@ class IngestionPipeline:
                 ]
                 await self._integrity.record_ingestion_trace(
                     source_path=doc.source_path,
-                    collection=doc.collection,
                     total_latency_ms=sum(s.duration_ms for s in batch_result.stages),
                     status=batch_result.status.value,
                     total_chunks=len(chunks),
                     stages=stage_data,
                     error="; ".join(batch_result.errors) if batch_result.errors else None,
                 )
-                logger.info(
-                    "pipeline_trace_recorded",
-                    metadata={
-                        "run_id": run_id,
-                        "source_path": doc.source_path,
-                        "total_chunks": len(chunks),
-                    },
-                )
+                logger.info("  ✓ Ingestion trace recorded")
             except Exception as e:
                 logger.warning(
                     "pipeline_trace_warning",
@@ -264,17 +249,15 @@ class IngestionPipeline:
                 total_chunks=len(chunks),
             )
 
-        logger.info(
-            "pipeline_process_done",
-            metadata={
-                "run_id": run_id,
-                "document_id": doc_id_short,
-                "source_path": doc.source_path,
-                "status": batch_result.status.value,
-                "total_chunks": len(chunks),
-                "stages": [s.stage for s in batch_result.stages],
-            },
-        )
+        # ── Summary ──
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("✅ Pipeline completed successfully!")
+        stage_summaries = [f"    {s.stage}: {s.items_processed} items ({s.duration_ms:.0f}ms)" for s in batch_result.stages]
+        for line in stage_summaries:
+            logger.info(line)
+        logger.info(f"   Total chunks: {len(chunks)}")
+        logger.info("=" * 60)
 
         return batch_result
 

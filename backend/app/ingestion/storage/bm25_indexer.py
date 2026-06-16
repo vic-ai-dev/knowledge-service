@@ -31,7 +31,6 @@ class BM25SearchResult:
     metadata: dict[str, Any] = field(default_factory=dict)
     source_path: str | None = None
     doc_id: str | None = None
-    collection: str = "default"
     category: str | None = None
     language: str | None = None
     doc_type: str | None = None
@@ -174,7 +173,7 @@ class BM25Indexer:
         p = 2
 
         if filters:
-            for key in ("collection", "category", "language", "doc_type"):
+            for key in ("category", "language", "doc_type"):
                 val = filters.get(key)
                 if val:
                     conditions.append(f"{key} = ${p}")
@@ -192,7 +191,7 @@ class BM25Indexer:
                 rows = await conn.fetch(
                     f"""
                     SELECT id, text, metadata, source_path, doc_id,
-                           collection, category, language, doc_type,
+                           category, language, doc_type,
                            ts_rank_cd(text_search, plainto_tsquery('simple', $1), 32) AS score
                     FROM {self._table}
                     WHERE {where}
@@ -212,7 +211,6 @@ class BM25Indexer:
                 metadata=self._parse_metadata(r.get("metadata")),
                 source_path=r.get("source_path"),
                 doc_id=str(r["doc_id"]) if r.get("doc_id") else None,
-                collection=r.get("collection", "default"),
                 category=r.get("category"),
                 language=r.get("language"),
                 doc_type=r.get("doc_type"),

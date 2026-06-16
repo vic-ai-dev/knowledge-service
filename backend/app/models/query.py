@@ -19,7 +19,6 @@ class QueryTrace(KnowledgeBase):
         UUID(as_uuid=True), primary_key=True
     )
     user_query: Mapped[str] = mapped_column(Text, nullable=False)
-    collection: Mapped[str] = mapped_column(String, default="default")
     category: Mapped[str | None] = mapped_column(String, nullable=True)
     language: Mapped[str | None] = mapped_column(String, nullable=True)
     total_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)

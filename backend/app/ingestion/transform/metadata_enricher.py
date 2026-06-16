@@ -32,7 +32,6 @@ class MetadataEnricher(BaseTransform):
     ):
         self._document_meta = document_meta or {}
         self._defaults = {
-            "collection": "default",
             "enrich_version": "1.0",
             "enriched_at": datetime.now(timezone.utc).isoformat(),
             **defaults,

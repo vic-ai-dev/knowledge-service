@@ -4,7 +4,7 @@ from app.models.ingestion import IngestionHistory, IngestionTrace
 from app.models.query import QueryTrace, QueryCache
 from app.models.evaluation import EvaluationResult, GoldenTestSet
 from app.models.conversation import Conversation
-from app.models.chunk import DocumentChunk, Collection
+from app.models.chunk import DocumentChunk
 from app.models.image import ImageIndex
 
 __all__ = [
@@ -19,6 +19,5 @@ __all__ = [
     "GoldenTestSet",
     "Conversation",
     "DocumentChunk",
-    "Collection",
     "ImageIndex",
 ]

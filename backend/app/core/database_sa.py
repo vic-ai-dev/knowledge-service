@@ -2,7 +2,7 @@
 
 遵循两数据库模式：
 - `knowledge` 库：业务数据（documents, ingestion_history, query_traces 等）
-- `knowledge_rag` 库：向量 + 全文检索数据（document_chunks, collections）
+- `knowledge_rag` 库：向量 + 全文检索数据（document_chunks）
 
 用法:
     async with get_async_session('knowledge') as session:

@@ -1,27 +1,21 @@
-"""E4 — 数据浏览端点（文档列表、分块浏览、集合 CRUD）。"""
+"""E4 — 数据浏览端点（文档列表、分块浏览）。"""
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete as sa_delete
 
 from app.core.database_sa import get_kb_session, get_rag_session
 from app.repositories.document_repo import DocumentRepository
 from app.repositories.chunk_repo import DocumentChunkRepository
-from app.repositories.base import BaseRepository
-from app.models.chunk import Collection, DocumentChunk
-from app.schemas.document import DocumentListResponse
+from app.models.chunk import DocumentChunk
 from app.common.log import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/data", tags=["data"])
 
 
-@router.get("/documents", response_model=DocumentListResponse)
+@router.get("/documents")
 async def list_documents(
     kb_session: AsyncSession = Depends(get_kb_session),
     category: str | None = Query(None),
@@ -43,7 +37,6 @@ async def list_documents(
             "id": str(d.id),
             "source_path": d.source_path,
             "title": d.title,
-            "collection": d.collection,
             "category": d.category,
             "language": d.language,
             "doc_type": d.doc_type,
@@ -79,36 +72,12 @@ async def list_chunks(
             "doc_id": str(c.doc_id) if c.doc_id else None,
             "chunk_index": c.chunk_index,
             "text": c.text,
-            "metadata": c.metadata if c.metadata else {},
+            "metadata": c.metadata_ if c.metadata_ else {},
             "source_path": c.source_path,
             "token_count": c.token_count,
             "created_at": c.created_at.isoformat() if c.created_at else None,
         })
     return {"items": items, "total": total, "page": page, "page_size": page_size}
-
-
-@router.get("/collections")
-async def list_collections(
-    rag_session: AsyncSession = Depends(get_rag_session),
-):
-    """列出所有集合。"""
-    session = rag_session
-    result = await session.execute(
-        select(Collection).order_by(Collection.created_at.desc())
-    )
-    rows = result.scalars().all()
-    collections = []
-    for c in rows:
-        collections.append({
-            "id": str(c.id),
-            "name": c.name,
-            "description": c.description,
-            "document_count": c.document_count,
-            "chunk_count": c.chunk_count,
-            "created_at": c.created_at.isoformat() if c.created_at else None,
-            "updated_at": c.updated_at.isoformat() if c.updated_at else None,
-        })
-    return {"collections": collections}
 
 
 @router.get("/categories")
@@ -130,62 +99,6 @@ async def list_languages():
     return {"languages": [{"id": "zh", "name": "中文"}, {"id": "en", "name": "英文"}]}
 
 
-@router.post("/collections")
-async def create_collection(
-    body: dict,
-    rag_session: AsyncSession = Depends(get_rag_session),
-):
-    """创建新的集合。"""
-    name = body.get("name", "").strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="集合名称不能为空")
-
-    description = body.get("description", "").strip()
-    col = Collection(name=name, description=description)
-    rag_session.add(col)
-    await rag_session.flush()
-    await rag_session.commit()
-
-    logger.info(
-        "collection_created",
-        message="集合已创建",
-        metadata={"name": name, "description": description},
-    )
-    return {"status": "created", "id": str(col.id), "name": name}
-
-
-@router.delete("/collections/{name}")
-async def delete_collection(
-    name: str,
-    rag_session: AsyncSession = Depends(get_rag_session),
-):
-    """删除指定集合。"""
-    session = rag_session
-    result = await session.execute(
-        select(Collection).where(Collection.name == name)
-    )
-    col = result.scalar_one_or_none()
-    if not col:
-        raise HTTPException(status_code=404, detail="集合不存在")
-
-    await session.execute(
-        sa_delete(DocumentChunk).where(
-            DocumentChunk.doc_id.in_(
-                select(DocumentChunk.doc_id).where(DocumentChunk.collection == name)
-            )
-        )
-    )
-    await session.delete(col)
-    await session.commit()
-
-    logger.info(
-        "collection_deleted",
-        message="集合已删除",
-        metadata={"name": name},
-    )
-    return {"status": "deleted", "name": name}
-
-
 @router.get("/chunks/{chunk_id}")
 async def get_chunk(
     chunk_id: str,
@@ -202,7 +115,7 @@ async def get_chunk(
         "doc_id": str(c.doc_id) if c.doc_id else None,
         "chunk_index": c.chunk_index,
         "text": c.text,
-        "metadata": c.metadata if c.metadata else {},
+        "metadata": c.metadata_ if c.metadata_ else {},
         "source_path": c.source_path,
         "token_count": c.token_count,
         "created_at": c.created_at.isoformat() if c.created_at else None,

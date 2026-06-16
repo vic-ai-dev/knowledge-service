@@ -66,7 +66,6 @@ class VectorUpserter:
             "id": chunk.chunk_id,
             "text": chunk.text,
             "metadata": chunk.metadata,
-            "collection": chunk.collection,
             "category": chunk.category,
             "language": chunk.language,
             "doc_type": chunk.doc_type,

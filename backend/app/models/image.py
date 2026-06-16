@@ -16,7 +16,6 @@ class ImageIndex(KnowledgeBase):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     image_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
-    collection: Mapped[str] = mapped_column(String, default="default")
     doc_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     page_num: Mapped[int | None] = mapped_column(Integer, nullable=True)
     category: Mapped[str | None] = mapped_column(String, nullable=True)

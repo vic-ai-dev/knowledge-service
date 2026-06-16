@@ -144,7 +144,6 @@ class PGVectorStore(BaseVectorStore):
                         str(chunk_id),
                         chunk.get("text", ""),
                         json.dumps(chunk.get("metadata", {}) or {}),
-                        chunk.get("collection", "default"),
                         chunk.get("category"),
                         chunk.get("language"),
                         chunk.get("doc_type"),
@@ -179,7 +178,7 @@ class PGVectorStore(BaseVectorStore):
         p = 1
 
         if filters:
-            for key in ("collection", "category", "language", "doc_type"):
+            for key in ("category", "language", "doc_type"):
                 val = filters.get(key)
                 if val:
                     conditions.append(f"{key} = ${p}")

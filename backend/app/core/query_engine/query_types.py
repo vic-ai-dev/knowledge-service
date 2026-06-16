@@ -33,7 +33,7 @@ class RankedChunk:
     score: float = 0.0               # 最终分数
     source_path: str | None = None
     doc_id: str | None = None
-    collection: str = "default"
+    category: str = ""
     category: str | None = None
     language: str | None = None
     doc_type: str | None = None

@@ -20,7 +20,6 @@ class DocumentInfo:
     id: str
     source_path: str
     title: str | None = None
-    collection: str = "default"
     category: str = ""
     language: str = ""
     doc_type: str = ""
@@ -62,7 +61,6 @@ class DocumentInfo:
     id: str
     source_path: str
     title: str | None = None
-    collection: str = "default"
     category: str = ""
     language: str = ""
     doc_type: str = ""

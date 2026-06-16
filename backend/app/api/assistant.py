@@ -172,7 +172,6 @@ async def ask(
         query_trace = QueryTrace(
             trace_id=trace_id_uuid,
             user_query=body.query,
-            collection="default",
             total_latency_ms=int(total_latency_ms),
             input_tokens=usage.get("prompt_tokens", 0),
             output_tokens=usage.get("completion_tokens", 0),
@@ -251,8 +250,7 @@ async def ask(
             error_trace = QueryTrace(
                 trace_id=uuid.uuid4(),
                 user_query=body.query,
-                collection="default",
-                total_latency_ms=int(total_latency_ms),
+                    total_latency_ms=int(total_latency_ms),
                 rejected=True,
                 rejection_reason=str(e),
                 error=str(e)[:500],
@@ -306,7 +304,6 @@ async def get_session(
         "id": str(conv.id),
         "title": conv.title,
         "model": conv.model,
-        "collection": conv.collection,
         "category": conv.category,
         "language": conv.language,
         "message_count": conv.message_count,

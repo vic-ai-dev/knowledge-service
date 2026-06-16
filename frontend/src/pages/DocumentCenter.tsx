@@ -1,10 +1,10 @@
-import { DeleteOutlined, ReloadOutlined, UploadOutlined, SearchOutlined, FolderAddOutlined, FolderOpenOutlined, FileTextOutlined, ExclamationCircleOutlined, InboxOutlined } from '@ant-design/icons';
+import { DeleteOutlined, ReloadOutlined, UploadOutlined, SearchOutlined, FileTextOutlined, ExclamationCircleOutlined, InboxOutlined } from '@ant-design/icons';
 import { Alert, Badge, Button, Card, Col, Empty, Input, message, Modal, Popconfirm, Row, Select, Space, Spin, Statistic, Table, Tag, Upload } from 'antd';
 import { useEffect, useState, useCallback } from 'react';
 import type { ColumnsType } from 'antd/es/table';
-import { listDocuments, listCollections, deleteDocument, batchDeleteDocuments, createCollection, deleteCollection } from '../api/documents';
+import { listDocuments, deleteDocument, batchDeleteDocuments } from '../api/documents';
 import { uploadFile } from '../api/ingestion';
-import type { DocumentInfo, Collection } from '../types';
+import type { DocumentInfo } from '../types';
 import type { UploadProps } from 'antd';
 const categoryLabels: Record<string, string> = {
   employee_handbook: '员工手册',
@@ -28,15 +28,11 @@ const formatFileSize = (bytes: number): string => {
 export default function DocumentCenter() {
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
-  const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [searchText, setSearchText] = useState('');
-  const [colModalOpen, setColModalOpen] = useState(false);
-  const [newColName, setNewColName] = useState('');
-  const [newColDesc, setNewColDesc] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [fileList, setFileList] = useState<File[]>([]);
@@ -46,13 +42,9 @@ export default function DocumentCenter() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [docResult, colResult] = await Promise.all([
-        listDocuments({ page, page_size: pageSize }),
-        listCollections(),
-      ]);
+      const docResult = await listDocuments({ page, page_size: pageSize });
       setDocuments(docResult.items);
       setTotal(docResult.total);
-      setCollections(colResult);
     } catch (err: any) {
       message.error('加载数据失败: ' + (err.message || '未知错误'));
     } finally {
@@ -93,36 +85,6 @@ export default function DocumentCenter() {
     }
   };
 
-  const handleCreateCollection = async () => {
-    if (!newColName.trim()) {
-      message.warning('请输入集合名称');
-      return;
-    }
-    try {
-      await createCollection({ name: newColName.trim(), description: newColDesc.trim() });
-      setColModalOpen(false);
-      setNewColName('');
-      setNewColDesc('');
-      message.success(`集合已创建`);
-      // Refresh collections
-      const cols = await listCollections();
-      setCollections(cols);
-    } catch (err: any) {
-      message.error('创建集合失败: ' + (err.message || '未知错误'));
-    }
-  };
-
-  const handleDeleteCollection = async (name: string) => {
-    try {
-      await deleteCollection(name);
-      message.success(`集合 "${name}" 已删除`);
-      const cols = await listCollections();
-      setCollections(cols);
-    } catch (err: any) {
-      message.error('删除集合失败: ' + (err.message || '未知错误'));
-    }
-  };
-
   const handleUpload = async () => {
     if (fileList.length === 0) {
       message.warning('请选择文件');
@@ -150,7 +112,7 @@ export default function DocumentCenter() {
 
   const columns: ColumnsType<DocumentInfo> = [
     {
-      title: '文件名', dataIndex: 'source_path', key: 'source_path', ellipsis: true, width: 280,
+      title: '文件名', dataIndex: 'title', key: 'title', ellipsis: true, width: 280,
     },
     {
       title: '类型', dataIndex: 'doc_type', key: 'doc_type', width: 80,
@@ -171,6 +133,12 @@ export default function DocumentCenter() {
     },
     {
       title: '上传时间', dataIndex: 'ingested_at', key: 'ingested_at', width: 180,
+      render: (t: string | null) => {
+        if (!t) return '-';
+        const d = new Date(t);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      },
     },
     {
       title: '操作', key: 'actions', width: 80,
@@ -215,9 +183,6 @@ export default function DocumentCenter() {
               <Button type="primary" icon={<UploadOutlined />} onClick={() => setUploadModalOpen(true)}>
                 上传文件
               </Button>
-              <Button icon={<FolderAddOutlined />} onClick={() => setColModalOpen(true)}>
-                新建集合
-              </Button>
               {selectedRowKeys.length > 0 && (
                 <Button danger icon={<DeleteOutlined />} onClick={handleBatchDelete}>
                   批量删除 ({selectedRowKeys.length})
@@ -240,37 +205,6 @@ export default function DocumentCenter() {
           </Col>
         </Row>
       </Card>
-
-      {/* 集合列表 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        {collections.map((col) => (
-          <Col xs={24} sm={12} lg={8} key={col.name}>
-            <Card
-              size="small"
-              hoverable
-              actions={[
-                <Popconfirm title={`删除集合 "${col.name}"？`} onConfirm={() => handleDeleteCollection(col.name)} okText="删除" cancelText="取消">
-                  <DeleteOutlined key="delete" style={{ color: '#ff4d4f' }} />
-                </Popconfirm>,
-              ]}
-            >
-              <Card.Meta
-                avatar={<FolderOpenOutlined style={{ fontSize: 24, color: '#7C3AED' }} />}
-                title={col.name}
-                description={
-                  <div>
-                    <p style={{ margin: 0, color: '#666', fontSize: 12 }}>{col.description}</p>
-                    <Space style={{ marginTop: 8 }}>
-                      <Tag>{col.document_count} 文档</Tag>
-                      <Tag>{col.chunk_count} Chunks</Tag>
-                    </Space>
-                  </div>
-                }
-              />
-            </Card>
-          </Col>
-        ))}
-      </Row>
 
       {/* 文档表格 */}
       <Card title={`文档库 (${filtered.length})`}>
@@ -332,32 +266,3 @@ export default function DocumentCenter() {
         </Upload.Dragger>
       </Modal>
 
-      {/* 新建集合 Modal */}
-      <Modal
-        title="新建集合"
-        open={colModalOpen}
-        onCancel={() => setColModalOpen(false)}
-        onOk={handleCreateCollection}
-        okText="创建"
-      >
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>集合名称</label>
-          <Input
-            placeholder="例如：hr_handbook"
-            value={newColName}
-            onChange={(e) => setNewColName(e.target.value)}
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>描述（可选）</label>
-          <Input.TextArea
-            placeholder="集合用途说明"
-            value={newColDesc}
-            onChange={(e) => setNewColDesc(e.target.value)}
-            rows={3}
-          />
-        </div>
-      </Modal>
-    </div>
-  );
-}

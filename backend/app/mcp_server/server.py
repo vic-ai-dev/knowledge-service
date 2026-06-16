@@ -5,7 +5,6 @@
 
 工具列表：
   - query_knowledge_hub：查询知识库
-  - list_collections：列出集合/分类
   - get_document_summary：获取文档摘要
 """
 
@@ -117,6 +116,5 @@ __all__ = [
     "mcp",
     "create_mcp_sse_app",
     "query_knowledge_hub",
-    "list_collections",
     "get_document_summary",
 ]

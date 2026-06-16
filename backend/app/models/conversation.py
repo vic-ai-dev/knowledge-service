@@ -20,7 +20,6 @@ class Conversation(KnowledgeBase):
     )
     title: Mapped[str] = mapped_column(String, nullable=False)
     model: Mapped[str] = mapped_column(String, default="default")
-    collection: Mapped[str] = mapped_column(String, default="default")
     category: Mapped[str | None] = mapped_column(String, nullable=True)
     language: Mapped[str | None] = mapped_column(String, nullable=True)
     message_count: Mapped[int] = mapped_column(Integer, default=0)

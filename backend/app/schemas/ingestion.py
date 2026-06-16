@@ -39,7 +39,6 @@ class IngestionTraceResponse(BaseModel):
 
     trace_id: str
     source_path: str
-    collection: str = "default"
     total_latency_ms: int | None = None
     status: str | None = None
     total_chunks: int | None = None

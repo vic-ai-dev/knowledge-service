@@ -113,7 +113,6 @@ async def _run(args: argparse.Namespace) -> None:
             category=args.category or _infer_category(f),
             language=args.language or _infer_language(f),
             title=args.title or f.stem,
-            collection=args.collection or "default",
         )
         documents.append(doc)
 
@@ -169,9 +168,7 @@ def main() -> None:
         help=f"语言（默认自动推断）",
     )
     parser.add_argument(
-        "--collection",
         default="default",
-        help="集合名称（默认 default）",
     )
     parser.add_argument(
         "--title",
