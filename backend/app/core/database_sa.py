@@ -22,6 +22,37 @@ from sqlalchemy.ext.asyncio import (
 from app.core.settings import get_settings
 from app.common.log import get_logger
 
+import time
+from sqlalchemy import event
+
+_sql_timings: dict[int, float] = {}
+
+
+def _install_sql_listeners(engine) -> None:
+    """Install MyBatis-style SQL logging on the engine."""
+    sync_engine = engine.sync_engine
+
+    @event.listens_for(sync_engine, "before_cursor_execute")
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        _sql_timings[id(conn)] = time.monotonic()
+
+    @event.listens_for(sync_engine, "after_cursor_execute")
+    def _after(conn, cursor, statement, parameters, context, executemany):
+        start = _sql_timings.pop(id(conn), None)
+        duration_ms = (time.monotonic() - start) * 1000 if start else 0.0
+        params_str = str(parameters)
+        if len(params_str) > 300:
+            params_str = params_str[:300] + "..."
+        stmt = statement
+        if len(stmt) > 2000:
+            stmt = stmt[:2000] + "..."
+        logger.info(
+            "sql",
+            message=f"[SQL] {stmt}",
+            params=params_str,
+            duration_ms=f"{duration_ms:.2f}",
+        )
+
 logger = get_logger(__name__)
 
 # ── 全局引擎 ──────────────────────────────────────────
@@ -60,6 +91,8 @@ async def init_sa_engine() -> None:
         pool_pre_ping=True,
         echo=False,
     )
+    _install_sql_listeners(_kb_engine)
+
     _kb_session_factory = async_sessionmaker(
         _kb_engine, class_=AsyncSession, expire_on_commit=False
     )
@@ -84,6 +117,8 @@ async def init_sa_engine() -> None:
         pool_pre_ping=True,
         echo=False,
     )
+    _install_sql_listeners(_rag_engine)
+
     _rag_session_factory = async_sessionmaker(
         _rag_engine, class_=AsyncSession, expire_on_commit=False
     )
