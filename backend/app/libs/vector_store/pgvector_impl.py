@@ -131,11 +131,11 @@ class PGVectorStore(BaseVectorStore):
                     await conn.execute(
                         f"""
                         INSERT INTO {self._table}
-                            (id, text, metadata, collection, category, language,
+                            (id, text, metadata, category, language,
                              doc_type, doc_id, chunk_index, source_path, token_count,
                              embedding)
-                        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11,
-                                $12::vector)
+                        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10,
+                                $11::vector)
                         ON CONFLICT (id) DO UPDATE SET
                             text        = EXCLUDED.text,
                             metadata    = EXCLUDED.metadata,

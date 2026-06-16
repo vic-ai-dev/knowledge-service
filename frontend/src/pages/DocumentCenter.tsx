@@ -266,3 +266,8 @@ export default function DocumentCenter() {
         </Upload.Dragger>
       </Modal>
 
+
+
+      </div>
+    );
+}

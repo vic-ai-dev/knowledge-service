@@ -57,7 +57,6 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     text              TEXT NOT NULL,
     text_search       tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(text, ''))) STORED,
     metadata          JSONB DEFAULT '{}'::jsonb,
-    collection        TEXT NOT NULL DEFAULT 'default',
     category          TEXT,
     language          TEXT,
     doc_type          TEXT,
@@ -81,7 +80,6 @@ CREATE INDEX IF NOT EXISTS idx_chunks_doc_id ON document_chunks(doc_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_category ON document_chunks(category);
 CREATE INDEX IF NOT EXISTS idx_chunks_language ON document_chunks(language);
 CREATE INDEX IF NOT EXISTS idx_chunks_doc_type ON document_chunks(doc_type);
-CREATE INDEX IF NOT EXISTS idx_chunks_collection ON document_chunks(collection);
 CREATE INDEX IF NOT EXISTS idx_chunks_index ON document_chunks(doc_id, chunk_index);
 
 -- 全文检索索引（tsvector/GIN，应用层实现 BM25 评分）

@@ -103,7 +103,6 @@ class IngestionPipeline:
         # ── Start ──
         logger.info("=" * 60)
         logger.info(f"Starting Ingestion Pipeline for: {doc.source_path}")
-        logger.info(f"  Collection: {doc.collection}")
         logger.info(f"  Category: {doc.category}")
         logger.info(f"  Language: {doc.language}")
         logger.info(f"  Doc type: {doc.doc_type}")

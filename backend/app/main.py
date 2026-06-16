@@ -1,6 +1,8 @@
 """Knowledge Service — FastAPI 应用入口。"""
 
 from __future__ import annotations
+import warnings
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API")
 
 import time
 from contextlib import asynccontextmanager
