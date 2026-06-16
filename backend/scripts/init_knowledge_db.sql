@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS ingestion_traces (
     source_path     TEXT NOT NULL,
     collection      TEXT DEFAULT 'default',
     total_latency_ms INTEGER,
-    status          TEXT CHECK (status IN ('success', 'failed')),
+    status          TEXT CHECK (status IN ('completed', 'failed')),
     total_chunks    INTEGER,
     total_images    INTEGER,
     stages          JSONB,
