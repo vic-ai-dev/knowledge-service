@@ -30,10 +30,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
+import re
+import structlog
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 # ── ragas 批量评估 ──
 from datasets import Dataset
@@ -601,8 +605,35 @@ def _print_summary(results: list[dict]) -> None:
 # ====================================================================
 
 # ═══════════════════════════════════════════════════════════════════
-# 主入口
+# 日志 / 文件输出工具 —— Tee stdout → log file
 # ═══════════════════════════════════════════════════════════════════
+
+class _Tee:
+    """Tee a stream: write to both the original stream and a log file."""
+    def __init__(self, original: TextIO, fileobj: TextIO) -> None:
+        self.original = original
+        self.fileobj = fileobj
+
+    def write(self, text: str) -> None:
+        self.original.write(text)
+        self.fileobj.write(text)
+        self.fileobj.flush()
+
+    def flush(self) -> None:
+        self.original.flush()
+        self.fileobj.flush()
+
+
+def _setup_eval_log(entry_name: str) -> tuple[Path, TextIO]:
+    """Tee sys.stdout to both console and a log file under backend/eval_log/."""
+    log_dir = _PROJECT_ROOT / "backend" / "eval_log"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = re.sub(r'[^\w\u4e00-\u9fff-]', "_", entry_name).strip("_")
+    timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    log_path = log_dir / f"{safe_name}_{timestamp}.log"
+    log_file = open(str(log_path), "w", encoding="utf-8")  # noqa: SIM115
+    sys.stdout = _Tee(sys.stdout, log_file)
+    return log_path, log_file
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description="One-Click Evaluation Script")
@@ -656,19 +687,26 @@ async def main() -> None:
             )
 
             # 逐文件执行 batch 评估
+            # Add eval log file handler
+            log_path, log_handler = _setup_eval_log(entries[0]["name"] if entries else "eval")
             results: list[dict] = []
-            for entry in entries:
-                r = await _eval_file_batch(
-                    session=session,
-                    entry=entry,
-                    search_mode=args.search_mode,
-                    top_k=args.top_k,
-                    rerank=args.rerank,
-                    force=args.force,
-                )
-                results.append(r)
+            try:
+                for entry in entries:
+                    r = await _eval_file_batch(
+                        session=session,
+                        entry=entry,
+                        search_mode=args.search_mode,
+                        top_k=args.top_k,
+                        rerank=args.rerank,
+                        force=args.force,
+                    )
+                    results.append(r)
+            finally:
+                sys.stdout.flush()
+                log_handler.close()
+                sys.stdout = sys.__stdout__
+                print(f"\n  Log saved to: {log_path}")
 
-        # ── Mode B: query_traces ──
         else:
             entries = await _load_query_traces(session, recent=args.recent)
             if not entries:
@@ -682,17 +720,24 @@ async def main() -> None:
             )
 
             # 逐批次执行（traces 模式通常只有一个 batch）
+            log_path, log_handler = _setup_eval_log("query_traces")
             results = []
-            for entry in entries:
-                r = await _eval_file_batch(
-                    session=session,
-                    entry=entry,
-                    search_mode=args.search_mode,
-                    top_k=args.top_k,
-                    rerank=args.rerank,
-                    force=args.force,
-                )
-                results.append(r)
+            try:
+                for entry in entries:
+                    r = await _eval_file_batch(
+                        session=session,
+                        entry=entry,
+                        search_mode=args.search_mode,
+                        top_k=args.top_k,
+                        rerank=args.rerank,
+                        force=args.force,
+                    )
+                    results.append(r)
+            finally:
+                sys.stdout.flush()
+                log_handler.close()
+                sys.stdout = sys.__stdout__
+                print(f"\n  Log saved to: {log_path}")
 
         _print_summary(results)
 

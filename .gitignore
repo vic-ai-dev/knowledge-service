@@ -58,3 +58,4 @@ settings.yml
 
 # Runtime data
 backend/data/
+eval_log/
