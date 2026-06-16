@@ -12,14 +12,13 @@ from openai import AsyncClient
 
 from app.libs.base.base_embedding import BaseEmbedding, EmbeddingResult
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
+
 import openai
 from app.libs.embedding.openai import EmbeddingError
 
 logger = get_logger(__name__)
 
 OLLAMA_DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"
-
 
 class OllamaEmbedding(BaseEmbedding):
     """基于 Ollama 的 Embedding 实现。
@@ -94,8 +93,6 @@ class OllamaEmbedding(BaseEmbedding):
             raise EmbeddingError("query text cannot be empty")
 
     # ── BaseEmbedding 接口实现 ──
-
-    @trace_span()
     async def embed_documents(
         self, texts: list[str], **kwargs: Any
     ) -> EmbeddingResult:
@@ -108,8 +105,6 @@ class OllamaEmbedding(BaseEmbedding):
             model=response.model,
             total_tokens=total_tokens,
         )
-
-    @trace_span(span_name="embed_query")
     async def embed_query(self, text: str, **kwargs: Any) -> list[float]:
         self._validate_query(text)
         response = await self._call_api(self._model, text)

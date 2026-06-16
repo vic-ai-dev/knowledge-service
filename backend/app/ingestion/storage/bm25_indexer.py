@@ -17,10 +17,8 @@ import asyncpg
 
 import jieba
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
-
 
 @dataclass
 class BM25SearchResult:
@@ -35,11 +33,9 @@ class BM25SearchResult:
     language: str | None = None
     doc_type: str | None = None
 
-
 class BM25IndexerError(RuntimeError):
     """BM25Indexer 通用异常。"""
     pass
-
 
 class BM25Indexer:
     """PostgreSQL 全文检索索引器。
@@ -136,8 +132,6 @@ class BM25Indexer:
             chars = [c for c in query if '\u4e00' <= c <= '\u9fff' and c not in stop_chars]
             return ''.join(chars)
         return ''.join(words)
-
-    @trace_span()
     async def search(
         self,
         query: str,
@@ -236,8 +230,6 @@ class BM25Indexer:
         return {}
 
     # ── 删除方法 ──
-
-    @trace_span()
     async def delete_by_doc_id(self, doc_id: str) -> int:
         """按文档 ID 删除全文检索索引记录。
 
@@ -260,8 +252,6 @@ class BM25Indexer:
             ) from e
         parts = result.split()
         return int(parts[-1]) if len(parts) > 1 else 0
-
-    @trace_span()
     async def delete(self, chunk_ids: list[str]) -> int:
         """按 chunk_id 列表删除全文检索索引记录。
 
@@ -286,6 +276,5 @@ class BM25Indexer:
             ) from e
         parts = result.split()
         return int(parts[-1]) if len(parts) > 1 else 0
-
 
 __all__ = ["BM25Indexer", "BM25SearchResult", "BM25IndexerError"]

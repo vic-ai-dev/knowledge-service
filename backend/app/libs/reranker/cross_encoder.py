@@ -21,7 +21,6 @@ from openai import AsyncClient
 
 from app.libs.base.base_reranker import BaseReranker, RerankResult
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
 
@@ -33,11 +32,9 @@ Passage: {passage}
 
 Relevance score:"""
 
-
 class RerankerError(RuntimeError):
     """Reranker 调用通用异常。"""
     pass
-
 
 class CrossEncoderReranker(BaseReranker):
     """Cross-encoder style reranker using an LLM via OpenAI-compatible API.
@@ -121,8 +118,6 @@ class CrossEncoderReranker(BaseReranker):
             raise RerankerError("candidates list cannot be empty")
 
     # ── BaseReranker 接口实现 ──
-
-    @trace_span()
     async def rerank(
         self,
         query: str,

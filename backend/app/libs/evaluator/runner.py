@@ -19,10 +19,8 @@ from app.core.query_engine.query_processor import QueryProcessor
 from app.models.evaluation import EvaluationResult, GoldenTestSet
 from app.common.log import get_logger
 from app.common.enums import SearchMode
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
-
 
 def _create_default_evaluator(**kwargs: Any) -> CompositeEvaluator:
     """通过 EvaluatorFactory 创建默认组合评估器。
@@ -37,7 +35,6 @@ def _create_default_evaluator(**kwargs: Any) -> CompositeEvaluator:
         ],
         weights=[1.0, 2.0],
     )
-
 
 class EvalRunner:
     """评估运行器。
@@ -58,8 +55,6 @@ class EvalRunner:
         self._kb_session = kb_session
         self._evaluator = evaluator or _create_default_evaluator(**kwargs)
         self._searcher = HybridSearch()
-
-    @trace_span()
     async def run_single(
         self,
         query: str,
@@ -234,6 +229,5 @@ class EvalRunner:
             )
 
         return all_metrics
-
 
 __all__ = ["EvalRunner"]

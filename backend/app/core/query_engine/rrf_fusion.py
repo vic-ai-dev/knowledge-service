@@ -11,15 +11,12 @@ from __future__ import annotations
 
 from app.core.query_engine.query_types import RankedChunk
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
-
 
 class RRFFusionError(RuntimeError):
     """RRF 融合通用异常。"""
     pass
-
 
 class RRFFusion:
     """倒数排序融合 (RRF) 处理器。
@@ -47,8 +44,6 @@ class RRFFusion:
             )
 
     # ── 核心方法 ──────────────────────────────────────────────
-
-    @trace_span()
     def fuse(
         self,
         dense_results: list[RankedChunk],
@@ -117,6 +112,5 @@ class RRFFusion:
         )
 
         return result
-
 
 __all__ = ["RRFFusion", "RRFFusionError"]

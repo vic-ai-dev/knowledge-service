@@ -17,7 +17,7 @@ from app.core.query_engine.sparse_retriever import SparseRetriever
 from app.core.types import QueryResult, RetrievalResult
 from app.common.log import get_logger
 from app.common.enums import SearchMode
-from app.observability.instrumentation import trace_span
+
 from app.observability.progress import (
     NoOpProgressCallback,
     PipelineProgress,
@@ -27,11 +27,9 @@ from app.observability.progress import (
 
 logger = get_logger(__name__)
 
-
 class HybridSearchError(RuntimeError):
     """HybridSearch 通用异常。"""
     pass
-
 
 class HybridSearch:
     """混合检索编排器。
@@ -76,8 +74,6 @@ class HybridSearch:
         ]
 
     # ── 核心方法 ──────────────────────────────────────────────
-
-    @trace_span()
     async def search(
         self,
         query: RetrievalQuery,
@@ -207,6 +203,5 @@ class HybridSearch:
                 metadata={"search_mode": query.search_mode},
             )
             raise HybridSearchError(str(e)) from e
-
 
 __all__ = ["HybridSearch", "HybridSearchError"]

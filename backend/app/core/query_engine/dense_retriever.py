@@ -16,15 +16,12 @@ from app.core.query_engine.query_types import RankedChunk
 from app.libs.base.base_vector_store import BaseVectorStore
 from app.libs.factory import EmbeddingFactory, VectorStoreFactory
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
-
 
 class DenseRetrieverError(RuntimeError):
     """DenseRetriever 通用异常。"""
     pass
-
 
 class DenseRetriever:
     """稠密向量检索器。
@@ -58,8 +55,6 @@ class DenseRetriever:
             raise DenseRetrieverError("query_text cannot be empty")
 
     # ── 核心方法 ──────────────────────────────────────────────
-
-    @trace_span()
     async def retrieve(
         self,
         query_text: str,
@@ -129,6 +124,5 @@ class DenseRetriever:
         )
 
         return chunks
-
 
 __all__ = ["DenseRetriever", "DenseRetrieverError"]

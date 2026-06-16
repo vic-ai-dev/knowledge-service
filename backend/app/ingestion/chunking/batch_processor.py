@@ -29,7 +29,7 @@ from app.ingestion.transform.chunk_refiner import ChunkRefiner
 from app.ingestion.transform.metadata_enricher import MetadataEnricher
 from app.libs.factory import LoaderFactory, SplitterFactory
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
+
 from app.observability.progress import (
     NoOpProgressCallback,
     PipelineProgress,
@@ -39,11 +39,9 @@ from app.observability.progress import (
 
 logger = get_logger(__name__)
 
-
 class BatchProcessorError(RuntimeError):
     """BatchProcessor 通用异常。"""
     pass
-
 
 class BatchProcessor:
     """文档摄入批处理器。
@@ -123,8 +121,6 @@ class BatchProcessor:
         )
 
     # ── 核心方法 ──
-
-    @trace_span()
     async def process_document(
         self,
         doc: IngestionDocument,
@@ -307,8 +303,6 @@ class BatchProcessor:
             logger.error(f"  ✗ Batch processing failed: {e}")
 
         return result
-
-    @trace_span()
     async def process_batch(
         self,
         documents: list[IngestionDocument],
@@ -334,6 +328,5 @@ class BatchProcessor:
             result = await self.process_document(doc)
             results.append(result)
         return results
-
 
 __all__ = ["BatchProcessor", "BatchProcessorError"]

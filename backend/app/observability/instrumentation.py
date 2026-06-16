@@ -1,11 +1,4 @@
-"""全链路打点辅助工具。
-
-提供装饰器、上下文管理器和快捷函数，方便在 Ingestion/Query Pipeline
-以及服务层各阶段打点。所有打点自动继承当前 TraceContext。
-
-核心概念：
-  - trace_span: 异步函数装饰器，自动记录 span 开始/结束/异常
-"""
+"""LLM API 调用日志辅助工具。"""
 
 from __future__ import annotations
 
@@ -18,7 +11,6 @@ from app.common.log import get_logger
 _F = TypeVar("_F", bound=Callable[..., Any])
 logger = get_logger("knowledge_service.instrumentation")
 
-
 def trace_span(
     span_name: str | None = None,
     **fixed_metadata: Any,
@@ -29,7 +21,6 @@ def trace_span(
     包含 span_name、耗时和结果摘要。
 
     用法:
-        @trace_span("dense_search", top_k=10)
         async def dense_search(query: str) -> list[Chunk]:
             ...
     """
@@ -89,14 +80,12 @@ def trace_span(
 
     return decorator
 
-
 def _summarize(obj: Any, max_len: int = 200) -> str:
     """截断摘要（避免日志过大）。"""
     s = str(obj)
     if len(s) > max_len:
         return s[:max_len] + "..."
     return s
-
 
 def log_llm_call(
     model: str,
@@ -121,8 +110,6 @@ def log_llm_call(
         },
     )
 
-
 __all__ = [
-    "trace_span",
     "log_llm_call",
 ]

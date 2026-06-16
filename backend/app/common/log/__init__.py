@@ -190,11 +190,17 @@ def setup_structlog() -> None:
             event_dict["level"] = f"{style}{level.upper()}{_reset}"
         return event_dict
 
+    def _clean_service_for_console(logger, method_name, event_dict):
+        """Remove 'service' key from console output (appended as key=value at end)."""
+        event_dict.pop("service", None)
+        return event_dict
+
     console_formatter = structlog.stdlib.ProcessorFormatter(
         processors=[
             set_logger_name,
             _format_timestamp_to_local,
             _style_level_for_console,
+            _clean_service_for_console,
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             ConsoleRenderer(columns=_build_columns(tracing_enabled=tracing_enabled)),
         ],

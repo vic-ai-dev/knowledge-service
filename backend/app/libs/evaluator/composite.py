@@ -6,10 +6,8 @@ from typing import Any
 
 from app.libs.base.base_evaluator import BaseEvaluator, EvalMetrics
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
-
 
 class CompositeEvaluator(BaseEvaluator):
     """组合评估器。
@@ -27,8 +25,6 @@ class CompositeEvaluator(BaseEvaluator):
         self._weights: list[float] = kwargs.pop("weights", None) or [1.0] * len(evaluators)
         if len(self._weights) != len(evaluators):
             raise ValueError("weights must match evaluators count")
-
-    @trace_span()
     async def evaluate(
         self,
         query: str,
@@ -93,6 +89,5 @@ class CompositeEvaluator(BaseEvaluator):
             context_precision=merged.get("context_precision"),
             extra=merged_extra,
         )
-
 
 __all__ = ["CompositeEvaluator"]

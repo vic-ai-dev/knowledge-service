@@ -13,13 +13,12 @@ from openai import AsyncClient
 
 from app.libs.base.base_llm import BaseLLM, LLMResponse
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span, log_llm_call
+, log_llm_call
 from app.libs.llm.openai import LLMError
 
 logger = get_logger(__name__)
 
 OLLAMA_DEFAULT_BASE_URL = "http://127.0.0.1:11434/v1"
-
 
 class OllamaLLM(BaseLLM):
     """基于 Ollama 的 LLM 实现。
@@ -95,8 +94,6 @@ class OllamaLLM(BaseLLM):
             return error.response.text or "Unknown error"
 
     # ── BaseLLM 接口实现 ──────────────────────────────────────
-
-    @trace_span()
     async def generate(
         self,
         prompt: str | None = None,

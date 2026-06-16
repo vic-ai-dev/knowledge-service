@@ -14,15 +14,12 @@ from app.ingestion.models import ChunkRecord
 from app.libs.base.base_vector_store import BaseVectorStore
 from app.libs.factory import VectorStoreFactory
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
-
 
 class VectorUpserterError(RuntimeError):
     """VectorUpserter 通用异常。"""
     pass
-
 
 class VectorUpserter:
     """向量存储写入器。
@@ -77,8 +74,6 @@ class VectorUpserter:
         }
 
     # ── 核心方法 ──
-
-    @trace_span()
     async def upsert(self, chunks: list[ChunkRecord]) -> int:
         """批量写入 ChunkRecord 到 pgvector。
 
@@ -121,8 +116,6 @@ class VectorUpserter:
         )
 
         return count
-
-    @trace_span()
     async def delete_by_doc_id(self, doc_id: str) -> int:
         """按文档 ID 删除向量。
 
@@ -138,6 +131,5 @@ class VectorUpserter:
             metadata={"doc_id": doc_id, "deleted": count},
         )
         return count
-
 
 __all__ = ["VectorUpserter", "VectorUpserterError"]

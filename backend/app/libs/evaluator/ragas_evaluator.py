@@ -24,14 +24,12 @@ from ragas.llms.base import LangchainLLMWrapper
 from app.libs.base.base_evaluator import BaseEvaluator, EvalMetrics
 from app.core.settings import get_settings
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
 
 # ── 指标分组 ────────────────────────────────────────────
 _METRICS = [faithfulness, answer_relevancy, context_precision, context_recall]
 _METRICS_REQUIRE_GT = {context_precision, context_recall}
-
 
 class RagasEvaluator(BaseEvaluator):
     """基于 ragas 库的评估器。
@@ -72,8 +70,6 @@ class RagasEvaluator(BaseEvaluator):
     @property
     def requires_embeddings(self) -> bool:
         return False
-
-    @trace_span()
     async def evaluate(
         self,
         query: str,
@@ -181,6 +177,5 @@ class RagasEvaluator(BaseEvaluator):
                 "ragas_version": "0.4.3",
             },
         )
-
 
 __all__ = ["RagasEvaluator"]

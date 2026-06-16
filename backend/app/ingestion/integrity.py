@@ -21,11 +21,10 @@ import asyncpg
 
 from app.core.settings import get_settings
 from app.common.enums import Category, Language, DocType, IngestionStatus, IngestionTraceStatus
-from app.observability.instrumentation import trace_span
+
 from app.common.log import get_logger
 
 logger = get_logger(__name__)
-
 
 @dataclass
 class IntegrityCheckResult:
@@ -37,7 +36,6 @@ class IntegrityCheckResult:
     previous_status: str | None = None
     message: str = ""
 
-
 def _compute_sha256_sync(path: str) -> str:
     """同步 SHA256 计算（在线程池中执行）。"""
     h = hashlib.sha256()
@@ -48,7 +46,6 @@ def _compute_sha256_sync(path: str) -> str:
                 break
             h.update(chunk)
     return h.hexdigest()
-
 
 class FileIntegrityChecker:
     """文件完整性检查器。
@@ -87,8 +84,6 @@ class FileIntegrityChecker:
         )
         self._own_pool = True
         return self._pool
-
-    @trace_span()
     async def register_document(
         self,
         document_id: str,
@@ -111,14 +106,13 @@ class FileIntegrityChecker:
                 """INSERT INTO documents
                    (id, source_path, title, category, language,
                     doc_type, file_size, file_hash, chunk_count)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                    ON CONFLICT (file_hash) DO UPDATE SET
                        chunk_count = EXCLUDED.chunk_count,
                        updated_at = NOW()""",
                 document_id,
                 source_path,
                 title or "",
-                collection,
                 category,
                 language,
                 doc_type,
@@ -150,8 +144,6 @@ class FileIntegrityChecker:
         """异步计算文件 SHA256 哈希值。"""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _compute_sha256_sync, str(path))
-
-    @trace_span()
     async def check_file(self, path: str | Path) -> IntegrityCheckResult:
         """检查文件是否已摄入。
 
@@ -221,8 +213,6 @@ class FileIntegrityChecker:
                 previous_status=prev_status,
                 message=f"上次状态为 {prev_status}，重新处理",
             )
-
-    @trace_span()
     async def register(
         self,
         source_path: str,
@@ -259,8 +249,6 @@ class FileIntegrityChecker:
             },
         )
         return run_id
-
-    @trace_span()
     async def record_ingestion_trace(
         self,
         source_path: str,
@@ -280,10 +268,9 @@ class FileIntegrityChecker:
                 """INSERT INTO ingestion_traces
                    (trace_id, source_path, total_latency_ms, status,
                     total_chunks, total_images, stages, error)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)""",
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)""",
                 trace_id,
                 source_path,
-                collection,
                 int(total_latency_ms),
                 status,
                 total_chunks,
@@ -301,8 +288,6 @@ class FileIntegrityChecker:
                 "total_chunks": total_chunks,
             },
         )
-
-    @trace_span()
     async def update_status(
         self,
         run_id: str,
@@ -344,8 +329,6 @@ class FileIntegrityChecker:
                 "total_chunks": total_chunks,
             },
         )
-
-    @trace_span()
     async def get_document_id_by_hash(self, file_hash: str) -> str | None:
         """通过 file_hash 查找已关联的 document_id。"""
         pool = await self._ensure_pool()
@@ -355,7 +338,6 @@ class FileIntegrityChecker:
                 file_hash,
             )
             return str(row["document_id"]) if row else None
-
 
 __all__ = [
     "FileIntegrityChecker",

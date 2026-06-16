@@ -14,15 +14,12 @@ from app.ingestion.models import ChunkRecord
 from app.libs.base.base_embedding import EmbeddingResult
 from app.libs.factory import EmbeddingFactory
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
-
 
 class DenseEncodeError(RuntimeError):
     """DenseEncoder 通用异常。"""
     pass
-
 
 class DenseEncoder:
     """稠密向量编码器。
@@ -69,8 +66,6 @@ class DenseEncoder:
             raise DenseEncodeError("chunks list cannot be empty")
 
     # ── 核心方法 ──
-
-    @trace_span()
     async def encode(self, chunks: list[ChunkRecord]) -> list[ChunkRecord]:
         """对 ChunkRecord 列表执行批量 Embedding。
 
@@ -123,6 +118,5 @@ class DenseEncoder:
         )
 
         return chunks
-
 
 __all__ = ["DenseEncoder", "DenseEncodeError"]

@@ -15,7 +15,6 @@ from starlette.applications import Starlette
 
 from app.common.log import get_logger
 from app.common.enums import SearchMode
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
 
@@ -30,15 +29,12 @@ mcp = FastMCP(
     debug=False,
 )
 
-
 # ── 工具注册 ───────────────────────────────────────────
-
 
 @mcp.tool(
     name="query_knowledge_hub",
     description="查询知识库，返回 Top-K 相关文档片段及引用。",
 )
-@trace_span()
 async def query_knowledge_hub(
     query: str,
     top_k: int = 5,
@@ -64,24 +60,20 @@ async def query_knowledge_hub(
     )
     return f"知识库查询: {query}\n(TODO: 实际检索实现)"
 
-
 @mcp.tool(
     name="list_collections",
     description="列出知识库中所有可用的集合/分类。",
 )
-@trace_span()
 async def list_collections() -> str:
     """列出知识库集合与分类。"""
     # TODO(E11): 连接 Database 查询实际集合
     logger.info("mcp_list_collections", message="MCP 列出集合")
     return "可用集合: default\n分类: employee_handbook, compliance, technical_spec, architecture\n语言: zh, en"
 
-
 @mcp.tool(
     name="get_document_summary",
     description="获取指定文档的摘要信息（标题、类型、大小、分块数等）。",
 )
-@trace_span()
 async def get_document_summary(doc_id: str) -> str:
     """获取文档摘要。
 
@@ -99,9 +91,7 @@ async def get_document_summary(doc_id: str) -> str:
     )
     return f"文档 {doc_id} 摘要\n(TODO: 实际文档查询实现)"
 
-
 # ── SSE App ────────────────────────────────────────────
-
 
 def create_mcp_sse_app() -> Starlette:
     """创建 MCP SSE Transport Starlette ASGI 应用。
@@ -110,7 +100,6 @@ def create_mcp_sse_app() -> Starlette:
         app.mount("/mcp", create_mcp_sse_app())
     """
     return mcp.sse_app()
-
 
 __all__ = [
     "mcp",

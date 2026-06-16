@@ -17,13 +17,12 @@ from openai import AsyncClient
 
 from app.libs.base.base_llm import BaseLLM, LLMResponse
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span, log_llm_call
+, log_llm_call
 from app.libs.llm.openai import LLMError
 
 logger = get_logger(__name__)
 
 DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com"
-
 
 class DeepSeekLLM(BaseLLM):
     """基于 DeepSeek API 的 LLM 实现。
@@ -109,8 +108,6 @@ class DeepSeekLLM(BaseLLM):
             return error.response.text or "Unknown error"
 
     # ── BaseLLM 接口实现 ──────────────────────────────────────
-
-    @trace_span()
     async def generate(
         self,
         prompt: str | None = None,

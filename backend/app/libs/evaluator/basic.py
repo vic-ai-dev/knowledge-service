@@ -17,15 +17,12 @@ from typing import Any
 
 from app.libs.base.base_evaluator import BaseEvaluator, EvalMetrics
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
-
 
 class EvaluatorError(ValueError):
     """Evaluator 输入校验异常。"""
     pass
-
 
 class BasicEvaluator(BaseEvaluator):
     """基础评估器，直接计算指标（无外部依赖）。"""
@@ -42,8 +39,6 @@ class BasicEvaluator(BaseEvaluator):
             raise EvaluatorError("query cannot be empty")
         if not retrieved_chunks:
             raise EvaluatorError("retrieved_chunks list cannot be empty")
-
-    @trace_span()
     async def evaluate(
         self,
         query: str,

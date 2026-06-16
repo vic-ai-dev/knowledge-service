@@ -45,6 +45,7 @@ def _install_sql_listeners(engine) -> None:
             params_str = params_str[:300] + "..."
         stmt = statement
         if len(stmt) > 2000:
+        stmt = stmt.replace("\\n", " ").replace("\\r", "")
             stmt = stmt[:2000] + "..."
         logger.info(
             "sql",

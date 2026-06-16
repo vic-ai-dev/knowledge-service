@@ -27,7 +27,7 @@ from app.ingestion.storage.vector_upserter import VectorUpserter
 from app.libs.base.base_llm import BaseLLM
 from app.common.log import get_logger
 from app.common.enums import DOCTYPE_VALUES, IngestionStatus
-from app.observability.instrumentation import trace_span
+
 from app.observability.progress import (
     NoOpProgressCallback,
     ProgressCallback,
@@ -35,11 +35,9 @@ from app.observability.progress import (
 
 logger = get_logger(__name__)
 
-
 class IngestionPipelineError(RuntimeError):
     """IngestionPipeline 通用异常。"""
     pass
-
 
 class IngestionPipeline:
     """数据摄取管线编排器。
@@ -82,8 +80,6 @@ class IngestionPipeline:
             )
 
     # ── 核心方法 ──
-
-    @trace_span()
     async def process_document(
         self,
         doc: IngestionDocument,
@@ -259,8 +255,6 @@ class IngestionPipeline:
         logger.info("=" * 60)
 
         return batch_result
-
-    @trace_span()
     async def process_batch(
         self,
         documents: list[IngestionDocument],
@@ -292,6 +286,5 @@ class IngestionPipeline:
         await self._integrity.close()
         if self._vector_upserter._store:
             await self._vector_upserter._store.close()
-
 
 __all__ = ["IngestionPipeline", "IngestionPipelineError"]

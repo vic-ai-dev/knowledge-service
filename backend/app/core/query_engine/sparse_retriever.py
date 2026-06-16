@@ -13,15 +13,12 @@ from app.core.query_engine.query_types import RankedChunk
 from app.ingestion.storage.bm25_indexer import BM25Indexer
 from app.libs.base.base_vector_store import VectorSearchResult
 from app.common.log import get_logger
-from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
-
 
 class SparseRetrieverError(RuntimeError):
     """SparseRetriever 通用异常。"""
     pass
-
 
 class SparseRetriever:
     """BM25 稀疏检索器。
@@ -52,8 +49,6 @@ class SparseRetriever:
             raise SparseRetrieverError("query_text cannot be empty")
 
     # ── 核心方法 ──────────────────────────────────────────────
-
-    @trace_span()
     async def retrieve(
         self,
         query_text: str,
@@ -115,6 +110,5 @@ class SparseRetriever:
         )
 
         return chunks
-
 
 __all__ = ["SparseRetriever", "SparseRetrieverError"]
