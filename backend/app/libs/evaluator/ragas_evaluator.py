@@ -1,84 +1,77 @@
-"""RagasEvaluator — LLM Judge 驱动的评估器。
+"""RagasEvaluator — 使用 ragas 库计算核心指标。
 
-不使用 ragas 库（因其依赖链过于复杂），而是通过 LLM 作为 Judge
-直接计算 faithfulness / answer_relevancy，并结合 BasicEvaluator
-计算 context_precision / context_recall。
+基于 ragas 0.4.3 的 async evaluate（aevaluate），
+通过 LangchainLLMWrapper + ChatOpenAI 复用系统配置的 LLM。
+预留 deepeval 等后续评估后端接入点（通过 EvaluatorFactory 注册）。
 """
 
 from __future__ import annotations
 
-import json
-import math
 from typing import Any
 
+from datasets import Dataset
+from langchain_openai import ChatOpenAI
+
+from ragas import aevaluate
+from ragas.metrics.collections import (
+    faithfulness,
+    answer_relevancy,
+    context_precision,
+    context_recall,
+)
+from ragas.llms.base import LangchainLLMWrapper
+
 from app.libs.base.base_evaluator import BaseEvaluator, EvalMetrics
-from app.libs.factory import LLMFactory
+from app.core.settings import get_settings
 from app.common.log import get_logger
 from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
 
-# ── Prompt 模板 ──────────────────────────────────────────
-
-FAITHFULNESS_PROMPT = """你是一位公正的评估员。你的任务是判断以下「回答」是否完全基于给定的「上下文」生成。
-
-评分规则：
-- 1.0：回答完全基于上下文，没有添加未被上下文支持的信息
-- 0.5：回答大部分基于上下文，但有一些未被明确支持的细节
-- 0.0：回答与上下文不一致，或添加了大量未被支持的信息
-
-请只返回一个 0.0 到 1.0 之间的数字，无需任何解释。
-
-上下文：
-{context}
-
-回答：
-{answer}
-
-评分："""
-
-ANSWER_RELEVANCY_PROMPT = """你是一位公正的评估员。你的任务是判断以下「回答」是否与「问题」直接相关。
-
-评分规则：
-- 1.0：回答直接回答了问题，内容完全相关
-- 0.5：回答部分相关，但没有直接回答核心问题
-- 0.0：回答与问题无关，或完全不相关
-
-请只返回一个 0.0 到 1.0 之间的数字，无需任何解释。
-
-问题：
-{question}
-
-回答：
-{answer}
-
-评分："""
-
-
-def _parse_score(text: str) -> float:
-    """从 LLM 回复中提取评分 (0.0-1.0)。"""
-    try:
-        # 尝试直接解析数字
-        cleaned = text.strip().strip('"').strip("'")
-        score = float(cleaned)
-        return max(0.0, min(1.0, score))
-    except (ValueError, TypeError):
-        # 尝试从文本中提取数字
-        import re
-        matches = re.findall(r"(\d+\.?\d*)", text)
-        if matches:
-            score = float(matches[0])
-            if score > 1.0:
-                score = score / 100.0  # 可能是 85 这种格式
-            return max(0.0, min(1.0, score))
-        return 0.5  # 默认中立
+# ── 指标分组 ────────────────────────────────────────────
+_METRICS = [faithfulness, answer_relevancy, context_precision, context_recall]
+_METRICS_REQUIRE_GT = {context_precision, context_recall}
 
 
 class RagasEvaluator(BaseEvaluator):
-    """LLM Judge 评估器，计算 Ragas 核心指标。"""
+    """基于 ragas 库的评估器。
+
+    自动从 settings.yaml 读取 LLM 配置，通过 LangChain ChatOpenAI
+    （OpenAI 兼容接口）驱动 ragas 的 LLM 评估任务。
+
+    Args:
+        llm: 可选，传入已经构造好的 LangchainLLMWrapper 或 ChatOpenAI。
+              不传时自动从 settings.yaml 读取。
+    """
 
     def __init__(self, **kwargs: Any):
-        self._llm = kwargs.pop("llm", None) or LLMFactory.create()
+        self._llm = kwargs.get("llm") or self._build_llm()
+
+    def _build_llm(self) -> LangchainLLMWrapper:
+        """根据系统配置构建 ragas 可用的 LLM。"""
+        cfg = get_settings().llm
+        api_key = (
+            cfg.api_key.get_secret_value()
+            if hasattr(cfg.api_key, "get_secret_value")
+            else cfg.api_key
+        )
+        chat = ChatOpenAI(
+            model=cfg.model,
+            api_key=api_key,
+            base_url=cfg.base_url,
+            temperature=getattr(cfg, "temperature", 0.0),
+            max_tokens=getattr(cfg, "max_tokens", 4096),
+        )
+        return LangchainLLMWrapper(chat)
+
+    # ── 可选配置接口（供工厂使用）──
+    @property
+    def requires_llm(self) -> bool:
+        return True
+
+    @property
+    def requires_embeddings(self) -> bool:
+        return False
 
     @trace_span()
     async def evaluate(
@@ -88,71 +81,104 @@ class RagasEvaluator(BaseEvaluator):
         ground_truth: list[str] | None = None,
         answer: str | None = None,
     ) -> EvalMetrics:
-        """执行评估。
+        """执行 ragas 评估。
 
         Args:
             query: 用户查询。
-            retrieved_chunks: 检索到的 chunk 文本列表（按相关性降序）。
-            ground_truth: 黄金级相关 chunk（可选，用于 context 指标）。
-            answer: LLM 生成的回答（可选，用于 faithfulness/answer_relevancy）。
+            retrieved_chunks: 检索到的 chunk 文本列表。
+            ground_truth: 黄金级相关文本列表（可选）。
+            answer: LLM 生成的回答（必需）。
+
+        Returns:
+            EvalMetrics: 包含 faithfulness / answer_relevancy / context_precision / context_recall。
         """
-        context = "\n\n".join(retrieved_chunks[:5]) if retrieved_chunks else ""
-        gt_set = set(ground_truth) if ground_truth else set()
+        if not answer:
+            raise ValueError("RagasEvaluator requires `answer` parameter")
 
-        # ── Faithfulness（需要 answer + context）──
-        faithfulness: float | None = None
-        if answer and context:
-            try:
-                resp = await self._llm.generate(
-                    messages=[
-                        {"role": "user", "content": FAITHFULNESS_PROMPT.format(
-                            context=context[:3000], answer=answer[:1000]
-                        )},
-                    ],
-                )
-                faithfulness = _parse_score(resp.content)
-                logger.info("eval_faithfulness", score=faithfulness, metadata={})
-            except Exception as e:
-                logger.warning("eval_faithfulness_failed", error=str(e))
-                faithfulness = 0.0
+        metrics = list(_METRICS)
 
-        # ── Answer Relevancy（需要 question + answer）──
-        answer_relevancy: float | None = None
-        if answer:
-            try:
-                resp = await self._llm.generate(
-                    messages=[
-                        {"role": "user", "content": ANSWER_RELEVANCY_PROMPT.format(
-                            question=query, answer=answer[:1000]
-                        )},
-                    ],
-                )
-                answer_relevancy = _parse_score(resp.content)
-                logger.info("eval_answer_relevancy", score=answer_relevancy, metadata={})
-            except Exception as e:
-                logger.warning("eval_answer_relevancy_failed", error=str(e))
-                answer_relevancy = 0.0
+        # 无 ground_truth 时跳过需要它的指标
+        if not ground_truth:
+            metrics = [m for m in metrics if m not in _METRICS_REQUIRE_GT]
 
-        # ── Context Precision（hit_rate on retrieved chunks vs ground_truth）──
-        context_precision: float | None = None
-        context_recall: float | None = None
-        if gt_set:
-            k = min(len(retrieved_chunks), 10)
-            hits = sum(1 for c in retrieved_chunks[:k] if c in gt_set)
-            context_precision = hits / k if k > 0 else 0.0
-            context_recall = hits / len(gt_set) if gt_set else 0.0
+        # ── 构建 Hugging Face Dataset ──
+        data: dict[str, list] = {
+            "question": [query],
+            "contexts": [retrieved_chunks],
+            "answer": [answer],
+        }
+        if ground_truth:
+            data["ground_truth"] = [ground_truth]
+
+        dataset = Dataset.from_dict(data)
+
+        # ── 调用 ragas ──
+        logger.info(
+            "ragas_eval_start",
+            message="开始 ragas 评估",
+            metadata={
+                "metrics": [m.name for m in metrics],
+                "has_gt": bool(ground_truth),
+                "llm_model": get_settings().llm.model,
+            },
+        )
+
+        try:
+            result = await aevaluate(
+                dataset=dataset,
+                metrics=metrics,
+                llm=self._llm,
+                raise_exceptions=True,
+            )
+        except Exception as e:
+            logger.error("ragas_eval_failed", error=str(e))
+            return EvalMetrics(
+                faithfulness=None,
+                answer_relevancy=None,
+                context_precision=None,
+                context_recall=None,
+                extra={
+                    "error": str(e),
+                    "ragas_error": True,
+                },
+            )
+
+        # ── 提取分数 ──
+        faithfulness_score = (
+            float(result["faithfulness"][0]) if "faithfulness" in result else None
+        )
+        relevancy_score = (
+            float(result["answer_relevancy"][0]) if "answer_relevancy" in result else None
+        )
+        precision_score = (
+            float(result["context_precision"][0]) if "context_precision" in result else None
+        )
+        recall_score = (
+            float(result["context_recall"][0]) if "context_recall" in result else None
+        )
+
+        logger.info(
+            "ragas_eval_done",
+            message="ragas 评估完成",
+            metadata={
+                "faithfulness": faithfulness_score,
+                "answer_relevancy": relevancy_score,
+                "context_precision": precision_score,
+                "context_recall": recall_score,
+            },
+        )
 
         return EvalMetrics(
-            hit_rate=context_recall or 0.0,
+            hit_rate=0.0,
             mrr=0.0,
             ndcg=0.0,
-            faithfulness=faithfulness,
-            answer_relevancy=answer_relevancy,
-            context_precision=context_precision,
+            faithfulness=faithfulness_score,
+            answer_relevancy=relevancy_score,
+            context_precision=precision_score,
+            context_recall=recall_score,
             extra={
-                "context_recall": context_recall,
-                "llm_provider": self._llm.model,
-                "note": "Faithfulness & AnswerRelevancy via LLM Judge; Context via overlap",
+                "ragas_model": get_settings().llm.model,
+                "ragas_version": "0.4.3",
             },
         )
 

@@ -13,9 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete as sa_delete
 
 from app.libs.base.base_evaluator import BaseEvaluator, EvalMetrics
-from app.libs.evaluator.basic import BasicEvaluator
-from app.libs.evaluator.composite import CompositeEvaluator
-from app.libs.evaluator.ragas_evaluator import RagasEvaluator
+from app.libs.factory import EvaluatorFactory
 from app.core.query_engine.hybrid_search import HybridSearch
 from app.core.query_engine.query_processor import QueryProcessor
 from app.models.evaluation import EvaluationResult, GoldenTestSet
@@ -26,13 +24,17 @@ logger = get_logger(__name__)
 
 
 def _create_default_evaluator(**kwargs: Any) -> CompositeEvaluator:
-    """创建默认组合评估器。"""
+    """通过 EvaluatorFactory 创建默认组合评估器。
+
+    当前组合 basic（hit_rate/mrr/ndcg）+ ragas（faithfulness/answer_relevancy），
+    后续可扩展 deepeval 等后端。工厂注册见 app.libs.factory。
+    """
     return CompositeEvaluator(
         evaluators=[
-            BasicEvaluator(**kwargs),
-            RagasEvaluator(**kwargs),
+            EvaluatorFactory.create("basic", **kwargs),
+            EvaluatorFactory.create("ragas", **kwargs),
         ],
-        weights=[1.0, 2.0],  # Ragas 权重更高
+        weights=[1.0, 2.0],
     )
 
 

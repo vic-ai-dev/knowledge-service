@@ -134,7 +134,16 @@ export default function EvaluationPanel() {
       title: '后端', dataIndex: 'backends_used', key: 'backends_used', width: 200,
       render: (b: string[]) => b.map((s) => <Tag key={s}>{s}</Tag>),
     },
-    { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
+    {
+      title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 180,
+      render: (v: string) => {
+        if (!v) return '-';
+        try {
+          const d = new Date(v);
+          return d.toISOString().slice(0, 19).replace('T', ' ');
+        } catch { return v; }
+      },
+    },
     {
       title: '操作', key: 'actions', width: 80,
       render: (_: unknown, record: EvalResult) => (
@@ -255,7 +264,7 @@ export default function EvaluationPanel() {
           <div>
             <p><strong>测试集:</strong> {selectedEval.test_set}</p>
             <p><strong>后端:</strong> {selectedEval.backends_used.join(' + ')}</p>
-            <p><strong>创建时间:</strong> {selectedEval.created_at}</p>
+            <p><strong>创建时间:</strong> {selectedEval.created_at ? new Date(selectedEval.created_at).toISOString().slice(0, 19).replace('T', ' ') : '-'}</p>
             <div style={{ marginTop: 16 }}>
               {Object.entries(selectedEval.metrics).map(([key, value]) => (
                 <div key={key} style={{ marginBottom: 12 }}>

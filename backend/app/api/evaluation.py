@@ -207,7 +207,10 @@ async def list_evaluation_results(
             id=str(r.id),
             metrics=r.metrics,
             test_set=r.test_set,
-            backends_used=list(r.backends_used.keys()) if r.backends_used else None,
+            backends_used=[
+                f"search_mode={r.backends_used.get('search_mode', '?')}",
+                "rerank" if r.backends_used.get("rerank") else "no-rerank",
+            ] if r.backends_used else None,
             created_at=r.created_at.isoformat() if r.created_at else None,
         ) for r in rows],
         total=total,

@@ -1697,7 +1697,7 @@ app/
 
 ### 📊 进度跟踪表 (Progress Tracking)
 
-> **状态说明**：`[ ]` 未开始 | `[~]` 进行中 | `[x]` 已完成
+> **状态说明**：`[ ]` 未开始 | `[~]` 进行中 | `✅` 已完成
 > 
 > **更新时间**：每完成一个子任务后更新对应状态
 
@@ -1744,53 +1744,53 @@ app/
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| C1 | 定义核心数据类型/契约（Document/Chunk/ChunkRecord + category/language） | [x] | 2026-06-14 | models.py 已创建，含 IngestionDocument/ChunkRecord/IngestionResult/IngestionProgress |
-| C2 | 文件完整性检查（SHA256 + PostgreSQL） | [x] | 2026-06-14 | FileIntegrityChecker 类 + IntegrityCheckResult 结果类型 |
-| C3 | Loader 抽象基类与 PDF/HTML/MD Loader | [x] | 2026-06-14 | 含 PDF/HTML/Markdown 三种 Loader 实现 |
-| C4 | Splitter 集成（按文件类型路由分块策略） | [x] | 2026-06-14 | MarkdownHeader/HTMLHeader/RecursiveCharacter + 工厂路由 |
-| C5 | Transform 基类 + ChunkRefiner | [x] | 2026-06-14 | Chunk 文本清洗与规范化 |
-| C6 | MetadataEnricher | [x] | 2026-06-14 | 文档级元数据注入 |
+| C1 | 定义核心数据类型/契约（Document/Chunk/ChunkRecord + category/language） | ✅ | 2026-06-14 | models.py 已创建，含 IngestionDocument/ChunkRecord/IngestionResult/IngestionProgress |
+| C2 | 文件完整性检查（SHA256 + PostgreSQL） | ✅ | 2026-06-14 | FileIntegrityChecker 类 + IntegrityCheckResult 结果类型 |
+| C3 | Loader 抽象基类与 PDF/HTML/MD Loader | ✅ | 2026-06-14 | 含 PDF/HTML/Markdown 三种 Loader 实现 |
+| C4 | Splitter 集成（按文件类型路由分块策略） | ✅ | 2026-06-14 | MarkdownHeader/HTMLHeader/RecursiveCharacter + 工厂路由 |
+| C5 | Transform 基类 + ChunkRefiner | ✅ | 2026-06-14 | Chunk 文本清洗与规范化 |
+| C6 | MetadataEnricher | ✅ | 2026-06-14 | 文档级元数据注入 |
 | C7 | ImageCaptioner | [-] | | 暂不实现 |
-| C8 | DenseEncoder | [x] | 2026-06-14 | |
+| C8 | DenseEncoder | ✅ | 2026-06-14 | |
 | C9 | SparseEncoder | [ ] | | |
-| C10 | BatchProcessor | [x] | 2026-06-14 | |
-| C11 | BM25Indexer（PostgreSQL 全文检索） | [x] | 2026-06-14 | |
-| C12 | VectorUpserter（pgvector 幂等 upsert） | [x] | 2026-06-14 | |
+| C10 | BatchProcessor | ✅ | 2026-06-14 | |
+| C11 | BM25Indexer（PostgreSQL 全文检索） | ✅ | 2026-06-14 | |
+| C12 | VectorUpserter（pgvector 幂等 upsert） | ✅ | 2026-06-14 | |
 | C13 | ImageStorage（图片存储+PostgreSQL 索引） | [ ] | | |
-| C14 | Pipeline 编排（MVP 串起来） | [x] | 2026-06-14 | |
-| C15 | 脚本入口 ingest.py | [x] | 2026-06-14 | |
+| C14 | Pipeline 编排（MVP 串起来） | ✅ | 2026-06-14 | |
+| C15 | 脚本入口 ingest.py | ✅ | 2026-06-14 | |
 
 #### 阶段 D：Retrieval MVP
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| D1 | QueryProcessor（参数验证 + search_mode/top_k/filters） | [x] | 2026-06-14 | query_processor.py |
-| D2 | DenseRetriever（EmbeddingFactory + PGVectorStore） | [x] | 2026-06-14 | dense_retriever.py |
-| D3 | SparseRetriever（BM25Indexer 封装） | [x] | 2026-06-14 | sparse_retriever.py |
-| D4 | RRF Fusion（倒数排序融合） | [x] | 2026-06-14 | rrf_fusion.py |
-| D5 | HybridSearch 编排（Dense→Sparse→RRF→Rerank） | [x] | 2026-06-14 | hybrid_search.py |
-| D6 | Reranker（Core 层编排 + Fallback） | [x] | 2026-06-14 | reranker.py |
-| D7 | 脚本入口 query.py（CLI 查询可用） | [x] | 2026-06-14 | query.py |
+| D1 | QueryProcessor（参数验证 + search_mode/top_k/filters） | ✅ | 2026-06-14 | query_processor.py |
+| D2 | DenseRetriever（EmbeddingFactory + PGVectorStore） | ✅ | 2026-06-14 | dense_retriever.py |
+| D3 | SparseRetriever（BM25Indexer 封装） | ✅ | 2026-06-14 | sparse_retriever.py |
+| D4 | RRF Fusion（倒数排序融合） | ✅ | 2026-06-14 | rrf_fusion.py |
+| D5 | HybridSearch 编排（Dense→Sparse→RRF→Rerank） | ✅ | 2026-06-14 | hybrid_search.py |
+| D6 | Reranker（Core 层编排 + Fallback） | ✅ | 2026-06-14 | reranker.py |
+| D7 | 脚本入口 query.py（CLI 查询可用） | ✅ | 2026-06-14 | query.py |
 
 #### 阶段 E：后端服务层（FastAPI + REST API + MCP SSE）
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| E1 | FastAPI 应用入口 + CORS + lifespan | [x] | 2026-06-14 | DB 池 + API 路由 + MCP SSE 已挂载 |
-| E2 | API 路由聚合 + 公共依赖注入（含数据库连接池） | [x] | 2026-06-14 | router.py + database.py (get_kb_conn/get_rag_conn) |
-| E3 | REST API：系统配置与统计端点 | [x] | 2026-06-14 | system.py（config + stats） |
-| E4 | REST API：数据浏览端点 | [x] | 2026-06-14 | data.py（documents/chunks/collections/categories/languages） |
-| E5 | REST API：Ingestion 管理端点（含文件类型校验 / 大小限制 / 速率限制） | [x] | 2026-06-14 | ingestion.py（upload + 校验 + 限流） |
-| E6 | REST API：查询与追踪端点 | [x] | 2026-06-14 | query.py（search + traces + metrics） |
-| E7 | REST API：评估端点 | [x] | 2026-06-14 | evaluation.py（testsets + run + results） |
-| E8 | REST API：图片服务端点 | [x] | 2026-06-14 | images.py（get_image + metadata） |
-| E9 | WebSocket 实时进度推送 | [x] | 2026-06-14 | main.py 已注册 /api/ws/ingestion/progress |
-| E10 | MCP SSE Transport 集成 | [x] | 2026-06-14 | server.py（FastMCP + sse_app） |
-| E11 | MCP 工具注册（query_knowledge_hub / list_collections / get_document_summary） | [x] | 2026-06-14 | 3 个工具已注册 |
-| E12 | 文档管理 API（文档 metadata 更新 / 批量删除 / 重新索引 / 集合管理 / 文档统计） | [x] | 2026-06-14 | documents.py（CRUD + batch + reindex + stats） |
-| E13 | AI 知识助手 API（问答查询 + 对话历史 CRUD + 对话管理） | [x] | 2026-06-14 | assistant.py（ask + sessions CRUD） |
-| E14 | 查询缓存层（query result cache + embedding cache，含 TTL 过期 + 自动清理） | [x] | 2026-06-14 | cache.py（QueryCache + EmbeddingCache + 后台清理协程） |
-| E15 | 数据库连接池调优 + pgvector HNSW 索引 + LLM 调用超时控制 | [x] | 2026-06-14 | timeout + pool_min/max_size + HNSW 已在 init SQL |
+| E1 | FastAPI 应用入口 + CORS + lifespan | ✅ | 2026-06-14 | DB 池 + API 路由 + MCP SSE 已挂载 |
+| E2 | API 路由聚合 + 公共依赖注入（含数据库连接池） | ✅ | 2026-06-14 | router.py + database.py (get_kb_conn/get_rag_conn) |
+| E3 | REST API：系统配置与统计端点 | ✅ | 2026-06-14 | system.py（config + stats） |
+| E4 | REST API：数据浏览端点 | ✅ | 2026-06-14 | data.py（documents/chunks/collections/categories/languages） |
+| E5 | REST API：Ingestion 管理端点（含文件类型校验 / 大小限制 / 速率限制） | ✅ | 2026-06-14 | ingestion.py（upload + 校验 + 限流） |
+| E6 | REST API：查询与追踪端点 | ✅ | 2026-06-14 | query.py（search + traces + metrics） |
+| E7 | REST API：评估端点 | ✅ | 2026-06-14 | evaluation.py（testsets + run + results） |
+| E8 | REST API：图片服务端点 | ✅ | 2026-06-14 | images.py（get_image + metadata） |
+| E9 | WebSocket 实时进度推送 | ✅ | 2026-06-14 | main.py 已注册 /api/ws/ingestion/progress |
+| E10 | MCP SSE Transport 集成 | ✅ | 2026-06-14 | server.py（FastMCP + sse_app） |
+| E11 | MCP 工具注册（query_knowledge_hub / list_collections / get_document_summary） | ✅ | 2026-06-14 | 3 个工具已注册 |
+| E12 | 文档管理 API（文档 metadata 更新 / 批量删除 / 重新索引 / 集合管理 / 文档统计） | ✅ | 2026-06-14 | documents.py（CRUD + batch + reindex + stats） |
+| E13 | AI 知识助手 API（问答查询 + 对话历史 CRUD + 对话管理） | ✅ | 2026-06-14 | assistant.py（ask + sessions CRUD） |
+| E14 | 查询缓存层（query result cache + embedding cache，含 TTL 过期 + 自动清理） | ✅ | 2026-06-14 | cache.py（QueryCache + EmbeddingCache + 后台清理协程） |
+| E15 | 数据库连接池调优 + pgvector HNSW 索引 + LLM 调用超时控制 | ✅ | 2026-06-14 | timeout + pool_min/max_size + HNSW 已在 init SQL |
 
 #### 阶段 F：Trace 基础设施与打点
 
@@ -1818,8 +1818,8 @@ app/
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| H1 | RagasEvaluator 实现 | ✅ | 2026-06-16 | LLM Judge 评估器，prompt 驱动的 faithfulness/answer_relevancy | |
-| H2 | CompositeEvaluator 实现 | ✅ | 2026-06-16 | 组合 Basic + Ragas，加权平均 | |
+| H1 | RagasEvaluator 实现 | ✅ | 2026-06-16 | ragas 库集成，faithfulness/answer_relevancy/context_precision/context_recall | |
+| H2 | CompositeEvaluator + EvaluatorFactory 实现 | ✅ | 2026-06-16 | 工厂策略模式，组合 Basic + Ragas，预留 deepeval 接入点 | |
 | H3 | EvalRunner + Golden Test Set | ✅ | 2026-06-16 | 支持单查询 + 测试集全量运行 | |
 | H4 | 评估面板页面完善 | ✅ | 2026-06-16 | API + Schema + 前端已对接 | |
 | H5 | Recall 回归测试（E2E，按 category 分层评估） | ✅ | 2026-06-16 | 20 个单元测试通过 | |

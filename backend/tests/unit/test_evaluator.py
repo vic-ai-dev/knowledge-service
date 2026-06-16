@@ -1,30 +1,20 @@
 """H5 — Recall 回归测试（单元级评估器验证）。
-
 测试评估器的核心逻辑：
 - BasicEvaluator: hit_rate, mrr, ndcg 计算是否正确
-- RagasEvaluator: _parse_score 解析是否可靠
+- RagasEvaluator 构造与导入验证
 - CompositeEvaluator: 权重合并是否合理
 """
-
 from __future__ import annotations
-
 import pytest
-
 from app.libs.base.base_evaluator import EvalMetrics
 from app.libs.evaluator.basic import BasicEvaluator
 from app.libs.evaluator.composite import CompositeEvaluator
-from app.libs.evaluator.ragas_evaluator import _parse_score
-
 pytestmark = pytest.mark.unit
-
-
 class TestBasicEvaluator:
     """BasicEvaluator 单元测试。"""
-
     @pytest.fixture
     def evaluator(self) -> BasicEvaluator:
         return BasicEvaluator(k=5)
-
     @pytest.mark.asyncio
     async def test_basic_empty_ground_truth(self, evaluator: BasicEvaluator):
         """无 ground_truth 时返回零值指标。"""
@@ -37,7 +27,6 @@ class TestBasicEvaluator:
         assert metrics.mrr == 0.0
         assert metrics.ndcg == 0.0
         assert "note" in metrics.extra
-
     @pytest.mark.asyncio
     async def test_basic_perfect_match(self, evaluator: BasicEvaluator):
         """完全匹配时所有指标应为 1.0。"""
@@ -49,7 +38,6 @@ class TestBasicEvaluator:
         assert metrics.hit_rate == 1.0
         assert metrics.mrr == 1.0
         assert metrics.ndcg == 1.0
-
     @pytest.mark.asyncio
     async def test_basic_half_match(self, evaluator: BasicEvaluator):
         """部分匹配时指标应在中间区间。"""
@@ -62,7 +50,6 @@ class TestBasicEvaluator:
         assert abs(metrics.hit_rate - 2 / 3) < 0.01
         # 第一个命中在 rank 1
         assert metrics.mrr == 1.0
-
     @pytest.mark.asyncio
     async def test_basic_no_match(self, evaluator: BasicEvaluator):
         """无匹配时所有指标应为 0.0。"""
@@ -74,7 +61,6 @@ class TestBasicEvaluator:
         assert metrics.hit_rate == 0.0
         assert metrics.mrr == 0.0
         assert metrics.ndcg == 0.0
-
     @pytest.mark.asyncio
     async def test_basic_empty_retrieval(self, evaluator: BasicEvaluator):
         """空检索结果应抛出异常。"""
@@ -84,7 +70,6 @@ class TestBasicEvaluator:
                 retrieved_chunks=[],
                 ground_truth=["a"],
             )
-
     @pytest.mark.asyncio
     async def test_basic_empty_query(self, evaluator: BasicEvaluator):
         """空查询应抛出异常。"""
@@ -93,7 +78,6 @@ class TestBasicEvaluator:
                 query="",
                 retrieved_chunks=["a"],
             )
-
     @pytest.mark.asyncio
     async def test_basic_retrieval_exceeds_ground_truth(self, evaluator: BasicEvaluator):
         """检索结果多于 ground_truth 时仍应正确计算。"""
@@ -104,7 +88,6 @@ class TestBasicEvaluator:
         )
         assert metrics.hit_rate == 1.0  # 1/1 命中
         assert metrics.mrr == 1.0
-
     @pytest.mark.asyncio
     async def test_basic_mrr_sequential(self, evaluator: BasicEvaluator):
         """MRR 应反映第一个匹配的位置。"""
@@ -115,7 +98,6 @@ class TestBasicEvaluator:
             ground_truth=["a"],
         )
         assert abs(metrics.mrr - 1 / 3) < 0.01
-
     @pytest.mark.asyncio
     async def test_basic_ndcg_ordering(self, evaluator: BasicEvaluator):
         """NDCG 应惩罚相关性靠后的排序。"""
@@ -131,49 +113,15 @@ class TestBasicEvaluator:
         )
         # 正序的 NDCG 应 >= 逆序的 NDCG
         assert metrics_ordered.ndcg >= metrics_reversed.ndcg
-
-
-class TestParseScore:
-    """_parse_score 工具函数测试。"""
-
-    def test_parse_valid_number(self):
-        assert _parse_score("0.85") == 0.85
-        assert _parse_score("1.0") == 1.0
-        assert _parse_score("0") == 0.0
-
-    def test_parse_with_text(self):
-        """从包含文本的回复中提取数字。"""
-        assert _parse_score("评分：0.75") == 0.75
-        assert _parse_score("答案质量：85\n合理") == 0.85
-
-    def test_parse_uppercase(self):
-        """处理 >1 的数字（可能是百分比）。"""
-        assert _parse_score("95分") == 0.95
-
-    def test_parse_edge_cases(self):
-        """边界情况。"""
-        assert 0.0 <= _parse_score("invalid") <= 1.0  # 返回默认 0.5
-        assert _parse_score("0.0") == 0.0
-        assert _parse_score("1.0") == 1.0
-
-    def test_parse_quoted(self):
-        """处理引号包围的数字。"""
-        assert _parse_score('"0.92"') == 0.92
-        assert _parse_score("'0.88'") == 0.88
-
-
 class TestCompositeEvaluator:
     """CompositeEvaluator 单元测试。"""
-
     @pytest.fixture
     def basic_evaluator(self) -> BasicEvaluator:
         return BasicEvaluator()
-
     def test_create_empty_fails(self):
         """空评估器列表应抛出异常。"""
         with pytest.raises(ValueError):
             CompositeEvaluator(evaluators=[])
-
     def test_create_invalid_weights(self):
         """权重数量不匹配应抛出异常。"""
         with pytest.raises(ValueError):
@@ -181,7 +129,6 @@ class TestCompositeEvaluator:
                 evaluators=[BasicEvaluator(), BasicEvaluator()],
                 weights=[1.0],
             )
-
     @pytest.mark.asyncio
     async def test_composite_single_evaluator(self):
         """单个评估器的组合应返回相同结果。"""
@@ -193,7 +140,6 @@ class TestCompositeEvaluator:
         )
         assert metrics.hit_rate == 1.0
         assert metrics.mrr == 1.0
-
     @pytest.mark.asyncio
     async def test_composite_two_evaluators(self):
         """两个评估器的组合应取均值。"""
@@ -211,7 +157,6 @@ class TestCompositeEvaluator:
         )
         # 两个评估器都返回 hit_rate=1.0
         assert metrics.hit_rate == 1.0
-
     @pytest.mark.asyncio
     async def test_composite_weights(self):
         """权重应影响最终结果。"""
@@ -229,14 +174,12 @@ class TestCompositeEvaluator:
         )
         # 两个评估器都返回相同的值
         assert metrics.hit_rate == 1.0
-
     @pytest.mark.asyncio
     async def test_composite_partial_failure(self):
         """单个评估器失败不应影响整体。"""
         class FailingEvaluator(BasicEvaluator):
             async def evaluate(self, **kwargs):
                 raise RuntimeError("模拟失败")
-
         composite = CompositeEvaluator(
             evaluators=[FailingEvaluator(), BasicEvaluator()],
         )
@@ -247,10 +190,61 @@ class TestCompositeEvaluator:
         )
         # 第一个失败，第二个成功
         assert metrics.hit_rate == 1.0
-
-
 __all__ = [
     "TestBasicEvaluator",
     "TestParseScore",
     "TestCompositeEvaluator",
+]
+class TestRagasEvaluator:
+    """RagasEvaluator 构造与导入测试（不调用 LLM）。"""
+    def test_import_and_create(self):
+        """验证 RagasEvaluator 可通过工厂创建。"""
+        from app.libs.evaluator.ragas_evaluator import RagasEvaluator
+        e = RagasEvaluator(llm="mock")  # 不触发实际 ChatOpenAI
+        assert e.requires_llm is True
+        assert e.requires_embeddings is False
+        # 验证继承链
+        from app.libs.base.base_evaluator import BaseEvaluator
+        assert isinstance(e, BaseEvaluator)
+    def test_requires_answer(self):
+        """不传 answer 时 evaluate 应抛出异常。"""
+        from app.libs.evaluator.ragas_evaluator import RagasEvaluator
+        e = RagasEvaluator(llm="mock")
+        import pytest
+        with pytest.raises(ValueError, match="answer"):
+            import asyncio
+            asyncio.run(e.evaluate(query="q", retrieved_chunks=["c"], answer=None))
+class TestEvaluatorFactory:
+    """EvaluatorFactory 注册与创建测试。"""
+    def test_has_all_registrations(self):
+        from app.libs.factory import EvaluatorFactory
+        assert "basic" in EvaluatorFactory._registry
+        assert "ragas" in EvaluatorFactory._registry
+        assert "composite" in EvaluatorFactory._registry
+    def test_create_basic(self):
+        from app.libs.factory import EvaluatorFactory
+        e = EvaluatorFactory.create("basic")
+        from app.libs.evaluator.basic import BasicEvaluator
+        assert isinstance(e, BasicEvaluator)
+    def test_create_ragas(self):
+        from app.libs.factory import EvaluatorFactory
+        # llm="mock" 跳过 ChatOpenAI 构造
+        e = EvaluatorFactory.create("ragas", llm="mock")
+        from app.libs.evaluator.ragas_evaluator import RagasEvaluator
+        assert isinstance(e, RagasEvaluator)
+    def test_create_unknown(self):
+        from app.libs.factory import EvaluatorFactory
+        import pytest
+        with pytest.raises(ValueError, match="unknown"):
+            EvaluatorFactory.create("unknown")
+    def test_create_composite_requires_evaluators(self):
+        from app.libs.factory import EvaluatorFactory
+        import pytest
+        with pytest.raises(TypeError):
+            EvaluatorFactory.create("composite")
+__all__ = [
+    "TestBasicEvaluator",
+    "TestCompositeEvaluator",
+    "TestRagasEvaluator",
+    "TestEvaluatorFactory",
 ]

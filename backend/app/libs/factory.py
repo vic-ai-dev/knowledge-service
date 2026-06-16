@@ -189,8 +189,7 @@ class LoaderFactory:
         if impl_cls is None:
             raise ValueError(f"Unknown Loader for doc_type: {doc_type}. Available: {list(cls._registry.keys())}")
         return impl_cls(**kwargs)
-
-# Register evaluators
+# ── Evaluator 注册 ──
 from app.libs.evaluator.basic import BasicEvaluator
 from app.libs.evaluator.ragas_evaluator import RagasEvaluator
 from app.libs.evaluator.composite import CompositeEvaluator
