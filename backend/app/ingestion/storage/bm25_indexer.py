@@ -15,6 +15,7 @@ from typing import Any
 
 import asyncpg
 
+import jieba
 from app.common.log import get_logger
 from app.observability.instrumentation import trace_span
 
@@ -106,6 +107,37 @@ class BM25Indexer:
 
     # ── 核心搜索方法 ──
 
+    @staticmethod
+    def _clean_cjk_query(query: str) -> str:
+        """Clean CJK query for PostgreSQL tsvector search.
+
+        PostgreSQL simple tokenization treats each CJK char as a separate
+        lexeme, and plainto_tsquery ANDs them. Question particles like
+        '是''什''么' that don't appear in docs cause zero matches.
+        We use jieba to extract content words and return a cleaned string.
+        """
+        if not query:
+            return query
+        has_cjk = any('\u4e00' <= c <= '\u9fff' for c in query)
+        if not has_cjk:
+            return query
+
+        STOP_WORDS = frozenset({
+            '是', '什么', '怎么', '如何', '为什么', '哪些', '哪个', '哪', '谁',
+            '吗', '呢', '吧', '的', '了', '在', '有', '和', '就', '都', '而',
+            '及', '与', '着', '或', '被', '把', '对', '从', '让',
+            '一个', '没有', '不是', '可以', '应该', '能够', '会', '要',
+            '将', '已经', '正在', '更', '最', '很', '比较', '非常',
+            '请问', '请教', '帮我', '告诉',
+        })
+
+        words = [w for w in jieba.lcut(query) if w.strip() and w not in STOP_WORDS]
+        if not words:
+            stop_chars = set(''.join(STOP_WORDS))
+            chars = [c for c in query if '\u4e00' <= c <= '\u9fff' and c not in stop_chars]
+            return ''.join(chars)
+        return ''.join(words)
+
     @trace_span()
     async def search(
         self,
@@ -137,7 +169,8 @@ class BM25Indexer:
         conditions: list[str] = [
             "text_search @@ plainto_tsquery('simple', $1)"
         ]
-        params: list[Any] = [query.strip()]
+        cleaned = self._clean_cjk_query(query.strip())
+        params: list[Any] = [cleaned]
         p = 2
 
         if filters:

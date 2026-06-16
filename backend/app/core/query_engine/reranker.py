@@ -12,7 +12,6 @@ from typing import Any
 from app.core.query_engine.query_types import RankedChunk
 from app.libs.factory import RerankerFactory
 from app.common.log import get_logger
-from app.common.enums import RerankBackend
 from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
@@ -38,7 +37,7 @@ class QueryReranker:
 
     def __init__(
         self,
-        rerank_backend: str | None = None,  # RerankBackend
+        rerank_backend: str | None = None,  # cross_encoder | None (None = use config default)
         **kwargs: Any,
     ):
         self._rerank_backend = rerank_backend

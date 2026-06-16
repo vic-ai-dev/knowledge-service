@@ -54,18 +54,10 @@ class SearchStrategy(str, Enum):
 @unique
 class RerankBackend(str, Enum):
     """重排序后端。"""
-    NONE = "none"
     CROSS_ENCODER = "cross_encoder"
-    LLM = "llm"
 
 
 @unique
-class FusionAlgorithm(str, Enum):
-    """融合算法。"""
-    RRF = "rrf"
-
-
-# ── 摄入相关状态 ─────────────────────────────────────────
 
 @unique
 class IngestionStatus(str, Enum):
@@ -136,7 +128,6 @@ __all__ = [
     "SearchMode",
     "SearchStrategy",
     "RerankBackend",
-    "FusionAlgorithm",
     "IngestionStatus",
     "IngestionTraceStatus",
     "PipelineStage",

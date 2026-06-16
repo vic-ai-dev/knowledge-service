@@ -143,7 +143,7 @@ class SplitterConfig(BaseModel):
 class RetrievalConfig(BaseModel):
     sparse_backend: str = "pg_bm25"
     fusion_algorithm: str = "rrf"
-    rerank_backend: Literal["none", "cross_encoder", "llm"] = "cross_encoder"
+    rerank_backend: Literal["none", "cross_encoder"] = "cross_encoder"
 
 
 class SparseSearchConfig(BaseModel):
