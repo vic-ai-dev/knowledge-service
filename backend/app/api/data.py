@@ -14,13 +14,14 @@ from app.repositories.document_repo import DocumentRepository
 from app.repositories.chunk_repo import DocumentChunkRepository
 from app.repositories.base import BaseRepository
 from app.models.chunk import Collection, DocumentChunk
+from app.schemas.document import DocumentListResponse
 from app.common.log import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/data", tags=["data"])
 
 
-@router.get("/documents")
+@router.get("/documents", response_model=DocumentListResponse)
 async def list_documents(
     kb_session: AsyncSession = Depends(get_kb_session),
     category: str | None = Query(None),

@@ -1837,16 +1837,16 @@ app/
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| J1 | 定义 Repository 抽象基类与通用 CRUD 接口 | [ ] | | base.py（零额外依赖，封装 asyncpg 通用操作） |
-| J2 | 实现 DocumentRepository | [ ] | | 替代散落在 API/Pipeline 中的 documents 表原始 SQL |
-| J3 | 实现 IngestionHistoryRepository | [ ] | | |
-| J4 | 实现 TraceRepository | [ ] | | |
-| J5 | 实现 ConversationRepository | [ ] | | |
-| J6 | API 层 + Pipeline 层切换为 Repository 调用 | [ ] | | 逐个替换，确保行为不变 |
-| J7 | 引入 SQLAlchemy 2.0 async + 定义 ORM 模型 | [ ] | | 按当前 schema 精确映射 |
-| J8 | 逐个 Repository 迁移到 SQLAlchemy 2.0 | [ ] | | 从 asyncpg 底层切换到 SQLAlchemy Core/ORM |
+| J1 | 定义 Repository 抽象基类与通用 CRUD 接口 | ✅ | 2026-06-14 | base.py（零额外依赖，封装 asyncpg 通用操作） |
+| J2 | 实现 DocumentRepository | ✅ | 2026-06-14 | 替代散落在 API/Pipeline 中的 documents 表原始 SQL |
+| J3 | 实现 IngestionHistoryRepository | ✅ | 2026-06-14 | |
+| J4 | 实现 TraceRepository | ✅ | 2026-06-14 | |
+| J5 | 实现 ConversationRepository | ✅ | 2026-06-14 | |
+| J6 | API 层 + Pipeline 层切换为 Repository 调用 | ✅ | 2026-06-14 | 逐个替换，确保行为不变 |
+| J7 | 引入 SQLAlchemy 2.0 async + 定义 ORM 模型 | ✅ | 2026-06-14 | 按当前 schema 精确映射 |
+| J8 | 逐个 Repository 迁移到 SQLAlchemy 2.0 | ✅ | 2026-06-14 | 从 asyncpg 底层切换到 SQLAlchemy Core/ORM |
 | J9 | 引入 Alembic，生成首次基线迁移 | [ ] | | 替换 `init_knowledge_db.sql` |
-| J10 | 引入 Pydantic Schema，API 层改用 Schema | [ ] | | 序列化/反序列化解耦 |
+| J10 | 引入 Pydantic Schema，API 层改用 Schema | ✅ | 2026-06-16 | data/assistant/ingestion/documents 端点已加 response_model |
 
 ---
 
@@ -1865,9 +1865,9 @@ app/
 | 阶段 G | 6 | 6 | 100% |
 | 阶段 H | 5 | 0 | 0% |
 | 阶段 I | 5 | 0 | 0% |
-| 阶段 J | 10 | 0 | 0% |
-| **总计** | **94** | **70** | **74%** |
-| **有效数** | **91** | **70** | **77%** | 3 项延期不计入有效任务 |
+| 阶段 J | 10 | 9 | 90% |
+| **总计** | **94** | **79** | **84%** |
+| **有效数** | **91** | **79** | **87%** | 3 项延期不计入有效任务 |
 | **延期** | **3** | **—** | **—** | B8 / B9 / C7（Vision 多模态等，待条件成熟后实现） |
 
 

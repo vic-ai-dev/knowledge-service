@@ -48,19 +48,6 @@ async def lifespan(app: FastAPI):
         )
         raise
 
-    # ── 初始化 asyncpg 连接池（过渡期兼容，失败不阻塞）──
-    try:
-        from app.core.database import init_db_pools
-
-        await init_db_pools()
-        _logger.info("db_pools_ready", message="asyncpg 连接池初始化完成（过渡期兼容）")
-    except Exception as e:
-        _logger.warning(
-            "db_pool_skip",
-            error=str(e),
-            message="asyncpg 连接池初始化跳过 — 已迁移至 SA，可安全忽略",
-        )
-
     yield
 
     # ── 关闭数据库连接池 ──
@@ -73,16 +60,6 @@ async def lifespan(app: FastAPI):
         _logger.warning(
             "sa_engine_close_warning",
             message=f"关闭 SA 引擎异常: {e}",
-        )
-
-    try:
-        from app.core.database import close_db_pools
-
-        await close_db_pools()
-    except Exception as e:
-        _logger.warning(
-            "db_close_warning",
-            message=f"关闭数据库连接时出现异常: {e}",
         )
 
     _logger.info(

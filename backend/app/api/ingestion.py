@@ -18,6 +18,7 @@ from app.ingestion.models import IngestionDocument
 from app.ingestion.pipeline import IngestionPipeline
 from app.common.log import get_logger
 from app.core.trace import get_trace_context
+from app.schemas.ingestion import IngestionHistoryListResponse, IngestionTraceListResponse
 import tempfile
 
 logger = get_logger(__name__)

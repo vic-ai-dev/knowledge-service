@@ -266,7 +266,7 @@ async def ask(
         raise HTTPException(status_code=500, detail=f"问答生成失败: {str(e)}")
 
 
-@router.get("/sessions")
+@router.get("/sessions", response_model=ConversationListResponse)
 async def list_sessions(
     kb_session: AsyncSession = Depends(get_kb_session),
     page: int = Query(1, ge=1),

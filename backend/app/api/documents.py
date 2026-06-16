@@ -19,6 +19,7 @@ from app.schemas.document import (
 )
 from app.models.document import Document
 from app.common.log import get_logger
+from app.schemas.document import DocumentResponse
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -65,7 +66,7 @@ async def list_documents(
     return DocumentListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.get("/{doc_id}")
+@router.get("/{doc_id}", response_model=DocumentResponse)
 async def get_document(
     doc_id: str,
     kb_session: AsyncSession = Depends(get_kb_session),
