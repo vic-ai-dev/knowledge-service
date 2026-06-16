@@ -13,7 +13,8 @@ import {
   FileTextOutlined, ThunderboltOutlined,
 } from '@ant-design/icons';
 import type { SearchMode, QueryResult, QueryTrace } from '../types';
-import { executeQuery, getQueryTraces, getQueryTraceDetail } from '../api/query';
+import { askAssistant } from '../api/assistant';
+import { getQueryTraces, getQueryTraceDetail } from '../api/query';
 
 const { Text, Paragraph, Title } = Typography;
 
@@ -71,7 +72,7 @@ export default function AIAssistant() {
     setSearching(true);
     setHasSearched(true);
     try {
-      const result = await executeQuery({ query: q, search_mode: searchMode, rerank: rerankEnabled });
+      const result = await askAssistant({ query: q, search_mode: searchMode, rerank: rerankEnabled });
       setQueryResult(result);
       fetchTraces(1);
       setTracePage(1);

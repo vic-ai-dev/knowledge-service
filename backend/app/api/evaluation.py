@@ -29,6 +29,7 @@ from app.schemas.evaluation import (
 )
 from app.libs.evaluator.runner import EvalRunner
 from app.common.log import get_logger
+from app.common.enums import EvaluationRunStatus
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/evaluation", tags=["evaluation"])
@@ -147,7 +148,7 @@ async def run_evaluation(
             })
             return EvalRunResponse(
                 task_id=task_id,
-                status="completed",
+                status=EvaluationRunStatus.COMPLETED.value,
                 completed=len(results),
                 total=len(results),
             )
@@ -172,7 +173,7 @@ async def run_evaluation(
                     logger.error("eval_run_failed", error=str(e), metadata={"test_set": ts.name})
             return EvalRunResponse(
                 task_id=task_id,
-                status="completed",
+                status=EvaluationRunStatus.COMPLETED.value,
                 completed=total_completed,
                 total=total_queries,
             )
@@ -180,7 +181,7 @@ async def run_evaluation(
         logger.error("eval_run_error", error=str(e))
         return EvalRunResponse(
             task_id=task_id,
-            status="error",
+            status=EvaluationRunStatus.ERROR.value,
             error=str(e),
         )
 

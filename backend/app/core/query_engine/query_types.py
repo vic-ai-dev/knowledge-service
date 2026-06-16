@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.common.enums import SearchMode, SEARCH_MODE_VALUES
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -10,7 +12,7 @@ from typing import Any
 class RetrievalQuery:
     """处理后的检索查询。"""
     query_text: str
-    search_mode: str = "hybrid"       # "vector_only" | "hybrid"
+    search_mode: str = SearchMode.HYBRID.value  # SearchMode: vector_only | hybrid
     top_k: int = 10
     filters: dict[str, Any] | None = None
     rerank: bool = True
@@ -18,7 +20,7 @@ class RetrievalQuery:
     def __post_init__(self) -> None:
         if self.top_k < 1:
             raise ValueError(f"top_k must be >= 1, got {self.top_k}")
-        if self.search_mode not in ("vector_only", "hybrid"):
+        if self.search_mode not in SEARCH_MODE_VALUES:
             raise ValueError(f"invalid search_mode: {self.search_mode}")
 
 

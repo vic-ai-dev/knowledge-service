@@ -29,18 +29,14 @@ from pathlib import Path
 from app.ingestion.models import IngestionDocument
 from app.ingestion.pipeline import IngestionPipeline
 from app.common.log import get_logger
+from app.common.enums import Category, Language, DocType, IngestionStatus, CATEGORY_VALUES, LANGUAGE_VALUES, DOCTYPE_VALUES
 
 logger = get_logger("ingest.cli")
 
 
 _SUPPORTED_EXTENSIONS = {".pdf", ".md", ".html", ".htm"}
-_SUPPORTED_CATEGORIES = {
-    "employee_handbook",
-    "compliance",
-    "technical_spec",
-    "architecture",
-}
-_SUPPORTED_LANGUAGES = {"zh", "en"}
+_SUPPORTED_CATEGORIES = CATEGORY_VALUES
+_SUPPORTED_LANGUAGES = LANGUAGE_VALUES
 
 
 def _resolve_files(path: str) -> list[Path]:
@@ -83,27 +79,27 @@ def _infer_category(path: Path) -> str:
     for cat in _SUPPORTED_CATEGORIES:
         if cat in p_lower:
             return cat
-    return "technical_spec"
+    return Category.TECHNICAL_SPEC.value
 
 
 def _infer_language(path: Path) -> str:
     """从路径和文件名推断语言（默认 zh）。"""
     p_lower = str(path).lower()
     for lang in _SUPPORTED_LANGUAGES:
-        if lang in p_lower or (lang == "en" and "english" in p_lower):
+        if lang in p_lower or (lang == Language.EN.value and "english" in p_lower):
             return lang
-    return "zh"
+    return Language.ZH.value
 
 
 def _infer_doc_type(path: Path) -> str:
     """根据文件后缀推断 doc_type。"""
     suffix = path.suffix.lower()
     if suffix == ".md":
-        return "md"
+        return DocType.MD.value
     elif suffix in (".html", ".htm"):
-        return "html"
+        return DocType.HTML.value
     else:
-        return "pdf"
+        return DocType.PDF.value
 
 
 async def _run(args: argparse.Namespace) -> None:
@@ -128,20 +124,20 @@ async def _run(args: argparse.Namespace) -> None:
     try:
         results = await pipeline.process_batch(documents)
 
-        ok = sum(1 for r in results if r.status.value == "completed")
-        skipped = sum(1 for r in results if r.status.value == "skipped")
-        failed = sum(1 for r in results if r.status.value == "failed")
+        ok = sum(1 for r in results if r.status.value == IngestionStatus.COMPLETED.value)
+        skipped = sum(1 for r in results if r.status.value == IngestionStatus.SKIPPED.value)
+        failed = sum(1 for r in results if r.status.value == IngestionStatus.FAILED.value)
 
         print(f"\n{'=' * 60}")
         print(f"Results:  {ok} completed, {skipped} skipped, {failed} failed")
         print(f"{'=' * 60}")
 
         for r in results:
-            if r.status.value == "failed":
+            if r.status.value == IngestionStatus.FAILED.value:
                 print(
                     f"  [FAIL] {r.source_path}: {'; '.join(r.errors)}"
                 )
-            elif r.status.value == "skipped":
+            elif r.status.value == IngestionStatus.SKIPPED.value:
                 print(f"  [SKIP] {r.source_path}")
             else:
                 print(

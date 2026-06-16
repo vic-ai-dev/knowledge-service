@@ -10,6 +10,7 @@ from typing import Any
 
 from app.core.query_engine.query_types import RetrievalQuery
 from app.common.log import get_logger
+from app.common.enums import SearchMode, SEARCH_MODE_VALUES
 
 logger = get_logger(__name__)
 
@@ -28,7 +29,7 @@ class QueryProcessor:
       3. 参数零值处理与默认值填充
     """
 
-    VALID_SEARCH_MODES = ("vector_only", "hybrid")
+    VALID_SEARCH_MODES = SEARCH_MODE_VALUES
 
     # ── 输入校验 ──────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ class QueryProcessor:
     def process(
         self,
         query_text: str,
-        search_mode: str = "hybrid",
+        search_mode: str = SearchMode.HYBRID.value,
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
         rerank: bool = True,

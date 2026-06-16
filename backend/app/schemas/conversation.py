@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
+from app.common.enums import SearchMode
 
 
 class ConversationResponse(BaseModel):
@@ -32,7 +33,7 @@ class ConversationListResponse(BaseModel):
 class MessageCreate(BaseModel):
     """消息创建请求。"""
     query: str
-    search_mode: str = "hybrid"
+    search_mode: str = SearchMode.HYBRID.value
     session_id: str | None = None
 
 

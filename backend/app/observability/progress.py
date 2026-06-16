@@ -8,27 +8,10 @@ WebSocket / 测试代码通过该回调获取实时状态。
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Callable
 
+from app.common.enums import PipelineStage
 
-class PipelineStage(str, Enum):
-    """Pipeline 阶段枚举。"""
-
-    LOADING = "loading"
-    CHECKING = "checking"
-    SPLITTING = "splitting"
-    TRANSFORMING = "transforming"
-    EMBEDDING = "embedding"
-    INDEXING = "indexing"
-    QUERY_PROCESSING = "query_processing"
-    DENSE_SEARCH = "dense_search"
-    SPARSE_SEARCH = "sparse_search"
-    FUSION = "fusion"
-    RERANK = "rerank"
-    RESPONSE_BUILDING = "response_building"
-    COMPLETED = "completed"
-    FAILED = "failed"
 
 
 @dataclass

@@ -13,6 +13,7 @@ from app.schemas.query import (
     QueryMetricsResponse,
 )
 from app.common.log import get_logger
+from app.common.enums import SearchMode
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/query", tags=["query"])
@@ -21,7 +22,7 @@ router = APIRouter(prefix="/query", tags=["query"])
 @router.post("/search")
 async def search(
     query: str,
-    search_mode: str = Query("hybrid"),
+    search_mode: str = Query(SearchMode.HYBRID.value),
     top_k: int = Query(10, ge=1, le=50),
     rerank: bool = True,
     collection: str | None = None,

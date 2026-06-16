@@ -17,6 +17,7 @@ from app.repositories.document_repo import DocumentRepository
 from app.ingestion.models import IngestionDocument
 from app.ingestion.pipeline import IngestionPipeline
 from app.common.log import get_logger
+from app.common.enums import IngestionStatus
 from app.core.trace import get_trace_context
 from app.schemas.ingestion import IngestionHistoryListResponse, IngestionTraceListResponse
 import tempfile
@@ -81,8 +82,8 @@ async def upload_document(
     info = _validate_file(file.filename or "unknown", content)
 
     # 校验 category / language
-    _VALID_CATEGORIES = {"employee_handbook", "compliance", "technical_spec", "architecture"}
-    _VALID_LANGUAGES = {"zh", "en"}
+    _VALID_CATEGORIES = CATEGORY_VALUES
+    _VALID_LANGUAGES = LANGUAGE_VALUES
     if category not in _VALID_CATEGORIES:
         raise HTTPException(status_code=400, detail=f"无效的 category: {category}. 允许值: {_VALID_CATEGORIES}")
     if language not in _VALID_LANGUAGES:
@@ -163,9 +164,9 @@ async def upload_document(
     trace_ctx = get_trace_context()
     trace_id = trace_ctx.get("trace_id", "")
 
-    if result.status.value == "completed":
+    if result.status.value == IngestionStatus.COMPLETED.value:
         status_msg = "completed"
-    elif result.status.value == "skipped":
+    elif result.status.value == IngestionStatus.SKIPPED.value:
         status_msg = "skipped (already ingested)"
     else:
         status_msg = "failed"
@@ -187,7 +188,7 @@ async def upload_document(
             "errors": result.errors,
             "stages": stage_details,
             "elapsed_ms": round((time.monotonic() - run_start) * 1000, 2),
-            "message": "文件处理完成" if result.status.value == "completed" else f"文件处理失败: {result.errors}",
+            "message": "文件处理完成" if result.status.value == IngestionStatus.COMPLETED.value else f"文件处理失败: {result.errors}",
         },
     )
 

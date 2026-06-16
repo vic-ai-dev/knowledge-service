@@ -2,7 +2,7 @@ import apiClient, { unwrapPaginated } from './client';
 import type { QueryRequest, QueryResult, QueryTrace, QueryMetrics } from '../types';
 
 export const executeQuery = (data: QueryRequest) =>
-  apiClient.post<QueryResult>('/query/search', null, { params: data }).then((r) => r.data);
+  apiClient.post<QueryResult>('/query/search', data).then((r) => r.data);
 
 export const getQueryTraces = (params?: { page?: number; page_size?: number }) =>
   unwrapPaginated<QueryTrace>(apiClient.get('/query/traces', { params }));

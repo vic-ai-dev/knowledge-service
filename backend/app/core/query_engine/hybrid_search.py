@@ -16,6 +16,7 @@ from app.core.query_engine.rrf_fusion import RRFFusion
 from app.core.query_engine.sparse_retriever import SparseRetriever
 from app.core.types import QueryResult, RetrievalResult
 from app.common.log import get_logger
+from app.common.enums import SearchMode
 from app.observability.instrumentation import trace_span
 from app.observability.progress import (
     NoOpProgressCallback,
@@ -118,7 +119,7 @@ class HybridSearch:
 
             # ── 稀疏检索（hybrid 模式） ─────────────────────
             sparse_results: list[RankedChunk] = []
-            if query.search_mode == "hybrid":
+            if query.search_mode == SearchMode.HYBRID.value:
                 self._progress(PipelineProgress(
                     run_id="search",
                     stage=PipelineStage.SPARSE_SEARCH,
@@ -140,7 +141,7 @@ class HybridSearch:
                 message="RRF fusion",
             ))
 
-            if query.search_mode == "hybrid" and dense_results and sparse_results:
+            if query.search_mode == SearchMode.HYBRID.value and dense_results and sparse_results:
                 fused = self._fusion.fuse(
                     dense_results=dense_results,
                     sparse_results=sparse_results,
@@ -179,7 +180,7 @@ class HybridSearch:
             logger.info(
                 "hybrid_search_done",
                 metadata={
-                    "search_mode": query.search_mode,
+                    "search_mode": query.search_mode,  # SearchMode
                     "dense_results": len(dense_results),
                     "sparse_results": len(sparse_results),
                     "final_results": len(results),

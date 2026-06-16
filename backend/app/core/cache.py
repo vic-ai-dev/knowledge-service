@@ -14,6 +14,7 @@ from collections import OrderedDict
 from typing import Any, Optional
 
 from app.common.log import get_logger
+from app.common.enums import SearchMode
 
 logger = get_logger(__name__)
 
@@ -104,7 +105,7 @@ class QueryCache(TTLCache):
     @staticmethod
     def make_key(
         query_text: str,
-        search_mode: str = "hybrid",
+        search_mode: str = SearchMode.HYBRID.value,
     ) -> str:
         """生成缓存 key（基于 query 的哈希）。"""
         return f"{query_text.strip().lower()}:{search_mode}"

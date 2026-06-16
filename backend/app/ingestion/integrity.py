@@ -20,7 +20,7 @@ from typing import Optional
 import asyncpg
 
 from app.core.settings import get_settings
-from app.ingestion.models import IngestionStatus
+from app.common.enums import Category, Language, DocType, IngestionStatus, IngestionTraceStatus
 from app.observability.instrumentation import trace_span
 from app.common.log import get_logger
 
@@ -95,9 +95,9 @@ class FileIntegrityChecker:
         source_path: str,
         title: str | None = None,
         collection: str = "default",
-        category: str = "technical_spec",
-        language: str = "zh",
-        doc_type: str = "md",
+        category: str = Category.TECHNICAL_SPEC.value,
+        language: str = Language.ZH.value,
+        doc_type: str = DocType.MD.value,
         file_size: int = 0,
         file_hash: str = "",
         chunk_count: int = 0,
@@ -189,7 +189,7 @@ class FileIntegrityChecker:
                 )
 
             prev_status = row["status"]
-            if prev_status == "completed":
+            if prev_status == IngestionStatus.COMPLETED.value:
                 logger.info(
                     "integrity_check_skip",
                     metadata={
@@ -317,7 +317,7 @@ class FileIntegrityChecker:
         pool = await self._ensure_pool()
 
         async with pool.acquire() as conn:
-            if status in ("completed", "failed"):
+            if status in (IngestionTraceStatus.COMPLETED.value, IngestionTraceStatus.FAILED.value):
                 await conn.execute(
                     """UPDATE ingestion_history
                        SET status = $1, total_chunks = $2, total_images = $3,

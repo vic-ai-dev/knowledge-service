@@ -15,6 +15,7 @@ from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 
 from app.common.log import get_logger
+from app.common.enums import SearchMode
 from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
@@ -42,7 +43,7 @@ mcp = FastMCP(
 async def query_knowledge_hub(
     query: str,
     top_k: int = 5,
-    search_mode: str = "hybrid",
+    search_mode: str = SearchMode.HYBRID.value,
     rerank: bool = True,
 ) -> str:
     """查询知识库。

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
+from app.common.enums import SearchMode
 
 
 class EvaluationResultResponse(BaseModel):
@@ -51,7 +52,7 @@ class GoldenTestSetListResponse(BaseModel):
 class EvalRunRequest(BaseModel):
     """评估运行请求。"""
     test_set_id: str | None = None
-    search_mode: str = "hybrid"
+    search_mode: str = SearchMode.HYBRID.value
     top_k: int = 10
     rerank: bool = True
 

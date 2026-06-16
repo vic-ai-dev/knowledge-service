@@ -18,6 +18,7 @@ from app.core.query_engine.hybrid_search import HybridSearch
 from app.core.query_engine.query_processor import QueryProcessor
 from app.models.evaluation import EvaluationResult, GoldenTestSet
 from app.common.log import get_logger
+from app.common.enums import SearchMode
 from app.observability.instrumentation import trace_span
 
 logger = get_logger(__name__)
@@ -63,7 +64,7 @@ class EvalRunner:
         self,
         query: str,
         ground_truth: list[str] | None = None,
-        search_mode: str = "hybrid",
+        search_mode: str = SearchMode.HYBRID.value,
         top_k: int = 10,
         rerank: bool = True,
         test_set_name: str | None = None,
@@ -161,7 +162,7 @@ class EvalRunner:
     async def run_test_set(
         self,
         test_set_id: str,
-        search_mode: str = "hybrid",
+        search_mode: str = SearchMode.HYBRID.value,
         top_k: int = 10,
         rerank: bool = True,
     ) -> list[EvalMetrics]:

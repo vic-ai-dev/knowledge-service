@@ -79,8 +79,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=["hybrid", "vector_only"],
-        default="hybrid",
+        choices=[SearchMode.HYBRID.value, SearchMode.VECTOR_ONLY.value],
+        default=SearchMode.HYBRID.value,
         help="检索模式（默认 hybrid）",
     )
     parser.add_argument(

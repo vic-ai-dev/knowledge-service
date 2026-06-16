@@ -17,6 +17,7 @@ import uuid
 from typing import Any
 
 from app.ingestion.embedding.dense_encoder import DenseEncoder
+from app.common.enums import DOCTYPE_VALUES
 from app.ingestion.models import (
     ChunkRecord,
     IngestionDocument,
@@ -72,7 +73,7 @@ class BatchProcessor:
     def _validate_document(self, doc: IngestionDocument) -> None:
         if not doc.source_path and not doc.text:
             raise BatchProcessorError("document must have source_path or text")
-        if doc.doc_type not in ("pdf", "md", "html"):
+        if doc.doc_type not in DOCTYPE_VALUES:
             raise BatchProcessorError(
                 f"unsupported doc_type: {doc.doc_type} (pdf/md/html)"
             )

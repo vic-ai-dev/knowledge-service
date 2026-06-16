@@ -26,6 +26,7 @@ from app.ingestion.models import (
 from app.ingestion.storage.vector_upserter import VectorUpserter
 from app.libs.base.base_llm import BaseLLM
 from app.common.log import get_logger
+from app.common.enums import DOCTYPE_VALUES, IngestionStatus
 from app.observability.instrumentation import trace_span
 from app.observability.progress import (
     NoOpProgressCallback,
@@ -75,7 +76,7 @@ class IngestionPipeline:
     def _validate_document(self, doc: IngestionDocument) -> None:
         if not doc.source_path and not doc.text:
             raise IngestionPipelineError("document must have source_path or text")
-        if doc.doc_type not in ("pdf", "md", "html"):
+        if doc.doc_type not in DOCTYPE_VALUES:
             raise IngestionPipelineError(
                 f"unsupported doc_type: {doc.doc_type} (pdf/md/html)"
             )
@@ -150,7 +151,7 @@ class IngestionPipeline:
             if doc.source_path:
                 await self._integrity.update_status(
                     run_id=run_id,
-                    status="failed",
+                    status=IngestionStatus.FAILED.value,
                     error_message="; ".join(batch_result.errors),
                 )
             return batch_result
@@ -182,7 +183,7 @@ class IngestionPipeline:
                 if doc.source_path:
                     await self._integrity.update_status(
                         run_id=run_id,
-                        status="failed",
+                        status=IngestionStatus.FAILED.value,
                         error_message=str(e),
                     )
                 return batch_result
@@ -259,7 +260,7 @@ class IngestionPipeline:
         if doc.source_path:
             await self._integrity.update_status(
                 run_id=run_id,
-                status="completed",
+                status=IngestionStatus.COMPLETED.value,
                 total_chunks=len(chunks),
             )
 

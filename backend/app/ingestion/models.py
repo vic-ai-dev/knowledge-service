@@ -4,26 +4,9 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
 
-
-class PipelineStage(str, Enum):
-    """Ingestion Pipeline 阶段。"""
-    LOADING = "loading"
-    SPLITTING = "splitting"
-    TRANSFORMING = "transforming"
-    EMBEDDING = "embedding"
-    INDEXING = "indexing"
-
-
-class IngestionStatus(str, Enum):
-    """文件摄入状态。"""
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    SKIPPED = "skipped"
+from app.common.enums import IngestionStatus, PipelineStage
 
 
 @dataclass
