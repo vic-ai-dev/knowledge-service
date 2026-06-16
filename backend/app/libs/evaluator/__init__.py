@@ -1,11 +1,14 @@
-"""Evaluator 实现包 — 导入即触发工厂注册。"""
+"""Evaluator 实现包。"""
 
-from app.libs.evaluator.basic import BasicEvaluator
-from app.libs.factory import EvaluatorFactory
+from app.libs.evaluator.basic import BasicEvaluator, EvaluatorError  # noqa: F401
+from app.libs.evaluator.ragas_evaluator import RagasEvaluator  # noqa: F401
+from app.libs.evaluator.composite import CompositeEvaluator  # noqa: F401
+from app.libs.evaluator.runner import EvalRunner  # noqa: F401
 
-# ── 注册默认实现 ────────────────────────────────────────────
-
-EvaluatorFactory.register("custom_metrics", BasicEvaluator)
-EvaluatorFactory.register("ragas", BasicEvaluator)
-
-__all__ = ["BasicEvaluator"]
+__all__ = [
+    "BasicEvaluator",
+    "RagasEvaluator",
+    "CompositeEvaluator",
+    "EvalRunner",
+    "EvaluatorError",
+]
