@@ -49,10 +49,22 @@ def add_trace_context(
     method_name: str,
     event_dict: dict[str, Any],
 ) -> dict[str, Any]:
-    """注入 trace_id / span_id / request_id。"""
-    from app.core.trace import get_trace_context
+    """从 OpenTelemetry 注入 trace_id / span_id。
 
-    event_dict.update(get_trace_context())
+    仅在有活跃 span 时注入（HTTP 请求 / 手动创建 span）。
+    request_id 来自 FastAPI middleware（app.core.trace.request_id_var）。
+    """
+    from opentelemetry import trace as ot_trace
+    from app.core.trace import get_request_id
+
+    span = ot_trace.get_current_span()
+    sc = span.get_span_context()
+    if sc.is_valid:
+        event_dict["trace_id"] = format(sc.trace_id, "032x")
+        event_dict["span_id"] = format(sc.span_id, "016x")
+
+    if rid := get_request_id():
+        event_dict["request_id"] = rid
     return event_dict
 
 

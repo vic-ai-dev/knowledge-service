@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -18,7 +19,6 @@ from app.ingestion.models import IngestionDocument
 from app.ingestion.pipeline import IngestionPipeline
 from app.common.log import get_logger
 from app.common.enums import CATEGORY_VALUES, LANGUAGE_VALUES, IngestionStatus
-from app.core.trace import get_trace_context
 from app.schemas.ingestion import IngestionHistoryListResponse, IngestionTraceListResponse
 import tempfile
 
@@ -158,8 +158,8 @@ async def upload_document(
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
     # ── 处理结果 ───────────────────────────────────────
-    trace_ctx = get_trace_context()
-    trace_id = trace_ctx.get("trace_id", "")
+    from app.observability.telemetry import current_trace_uuid
+    trace_id = str(current_trace_uuid() or uuid.uuid4())
 
     if result.status.value == IngestionStatus.COMPLETED.value:
         status_msg = "completed"

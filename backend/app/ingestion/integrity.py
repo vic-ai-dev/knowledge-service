@@ -21,6 +21,7 @@ import asyncpg
 
 from app.core.settings import get_settings
 from app.common.enums import Category, Language, DocType, IngestionStatus, IngestionTraceStatus
+from app.observability.telemetry import current_trace_uuid
 
 from app.common.log import get_logger
 
@@ -261,7 +262,7 @@ class FileIntegrityChecker:
     ) -> None:
         """写入 ingestion_traces 表。"""
         pool = await self._ensure_pool()
-        trace_id = str(uuid.uuid4())
+        trace_id = str(current_trace_uuid() or uuid.uuid4())
 
         async with pool.acquire() as conn:
             await conn.execute(

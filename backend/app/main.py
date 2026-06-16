@@ -5,6 +5,7 @@ import warnings
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API")
 
 import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, WebSocket
@@ -20,7 +21,6 @@ import app.models  # noqa: F401
 
 from app.core.settings import get_settings
 from app.common.log import setup_structlog, get_logger
-from app.core.trace import trace_context, generate_id, get_trace_context
 from app.api.websocket import ingestion_progress_endpoint
 
 _logger = get_logger(__name__)
@@ -93,69 +93,53 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # ── 注册 tracing + request_id 中间件 ──
+    # ── HTTP 访问日志 + request_id 中间件 ─────────────────
     @app.middleware("http")
-    async def tracing_middleware(request: Request, call_next):
-        trace_id = request.headers.get("X-Trace-Id", "")
-        parent_span_id = request.headers.get("X-Span-Id", "")
-        request_id = request.headers.get("X-Request-Id", generate_id())
-
+    async def http_log_middleware(request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        set_request_id(request_id)
         start = time.monotonic()
 
-        with trace_context(
-            trace_id=trace_id or None,
-            parent_span_id=parent_span_id or None,
-            request_id=request_id,
-            enabled=settings.observability.tracing.enabled,
-        ):
-            ctx = get_trace_context()
+        _logger.info(
+            "http_request",
+            metadata={
+                "method": request.method,
+                "path": request.url.path,
+                "query_string": str(request.url.query),
+                "client_host": request.client.host if request.client else "",
+            },
+        )
 
-            _logger.info(
-                "http_request",
-                metadata={
-                    "method": request.method,
-                    "path": request.url.path,
-                    "query_string": str(request.url.query),
-                    "client_host": request.client.host if request.client else "",
-                },
-            )
-
-            try:
-                response = await call_next(request)
-            except Exception as exc:
-                elapsed = time.monotonic() - start
-                _logger.error(
-                    "http_error",
-                    error=str(exc),
-                    metadata={
-                        "method": request.method,
-                        "path": request.url.path,
-                        "duration_ms": round(elapsed * 1000, 2),
-                    },
-                )
-                return JSONResponse(
-                    status_code=500,
-                    content={"detail": "Internal Server Error"},
-                )
-
+        try:
+            response = await call_next(request)
+        except Exception as exc:
             elapsed = time.monotonic() - start
-
-            if ctx.get("trace_id"):
-                response.headers["X-Trace-Id"] = ctx["trace_id"]
-            if ctx.get("span_id"):
-                response.headers["X-Span-Id"] = ctx["span_id"]
-            if ctx.get("request_id"):
-                response.headers["X-Request-Id"] = ctx["request_id"]
-
-            _logger.info(
-                "http_response",
+            _logger.error(
+                "http_error",
+                error=str(exc),
                 metadata={
                     "method": request.method,
                     "path": request.url.path,
-                    "status_code": response.status_code,
                     "duration_ms": round(elapsed * 1000, 2),
                 },
             )
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal Server Error"},
+            )
+
+        elapsed = time.monotonic() - start
+        response.headers["X-Request-Id"] = request_id
+
+        _logger.info(
+            "http_response",
+            metadata={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": round(elapsed * 1000, 2),
+            },
+        )
 
         return response
 
