@@ -27,10 +27,10 @@ from app.ingestion.models import (
 )
 from app.ingestion.transform.chunk_refiner import ChunkRefiner
 from app.ingestion.transform.metadata_enricher import MetadataEnricher
-from app.libs.factory import LoaderFactory, SplitterFactory
+from app.factory.factory import LoaderFactory, SplitterFactory
 from app.common.log import get_logger
 
-from app.observability.progress import (
+from app.common.pipeline_callback import (
     NoOpProgressCallback,
     PipelineProgress,
     PipelineStage,
@@ -101,13 +101,13 @@ class BatchProcessor:
         doc: IngestionDocument,
     ) -> ChunkRecord:
         """将 SplitResult 转换为 ChunkRecord，注入文档级元数据。"""
-        from app.libs.base.base_splitter import SplitResult
+        from app.factory.base.base_splitter import SplitResult
 
         if not isinstance(sr, SplitResult):
             raise BatchProcessorError(f"expected SplitResult, got {type(sr)}")
 
         return ChunkRecord(
-            chunk_id=str(uuid.uuid4()),
+            id=str(uuid.uuid4()),
             text=sr.text,
             metadata={
                 **sr.metadata,
@@ -163,7 +163,7 @@ class BatchProcessor:
 
             loader = LoaderFactory.create(doc.doc_type)
             if doc.text:
-                from app.libs.base.base_loader import LoadResult
+                from app.factory.base.base_loader import LoadResult
                 load_results = []
                 load_results.append(LoadResult(
                     text=doc.text,

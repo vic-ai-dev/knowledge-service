@@ -16,10 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete as sa_delete
 from pydantic import BaseModel
 
-from app.core.database_sa import get_kb_session
+from app.common.database_sa import get_kb_session
 from app.repositories.base import BaseRepository
-from app.models.evaluation import EvaluationResult, GoldenTestSet
-from app.schemas.evaluation import (
+from app.model.entity.evaluation import EvaluationResult, GoldenTestSet
+from app.model.dto.evaluation import (
     EvaluationResultResponse,
     EvaluationResultListResponse,
     GoldenTestSetResponse,
@@ -27,7 +27,7 @@ from app.schemas.evaluation import (
     EvalRunRequest,
     EvalRunResponse,
 )
-from app.libs.evaluator.runner import EvalRunner
+from app.factory.evaluator.runner import EvalRunner
 from app.common.log import get_logger
 from app.common.enums import EvaluationRunStatus
 

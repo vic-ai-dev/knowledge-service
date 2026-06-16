@@ -10,7 +10,6 @@
 
 import os
 import tempfile
-from pathlib import Path
 
 import pytest
 import yaml
@@ -85,37 +84,37 @@ class TestFieldValidators:
 
     def test_port_too_low_raises(self):
         """端口低于 1 应报错。"""
-        from app.core.settings import DatabaseConfig
+        from app.common.settings import DatabaseConfig
         with pytest.raises(ValueError, match="port"):
             DatabaseConfig(port=0)
 
     def test_port_too_high_raises(self):
         """端口高于 65535 应报错。"""
-        from app.core.settings import DatabaseConfig
+        from app.common.settings import DatabaseConfig
         with pytest.raises(ValueError, match="port"):
             DatabaseConfig(port=70000)
 
     def test_max_connections_zero_raises(self):
         """max_connections < 1 应报错。"""
-        from app.core.settings import DatabaseConfig
+        from app.common.settings import DatabaseConfig
         with pytest.raises(ValueError, match="max_connections"):
             DatabaseConfig(max_connections=0)
 
     def test_chunk_size_too_small_raises(self):
         """chunk_size < 100 应报错。"""
-        from app.core.settings import SplitterStrategy
+        from app.common.settings import SplitterStrategy
         with pytest.raises(ValueError, match="chunk_size"):
             SplitterStrategy(chunk_size=50)
 
     def test_invalid_embedding_dims_raises(self):
         """非法 embedding 维度应报错。"""
-        from app.core.settings import VectorStoreConfig
+        from app.common.settings import VectorStoreConfig
         with pytest.raises(ValueError, match="embedding_dimensions"):
             VectorStoreConfig(embedding_dimensions=256)
 
     def test_max_file_size_zero_raises(self):
         """max_file_size <= 0 应报错。"""
-        from app.core.settings import ServerConfig
+        from app.common.settings import ServerConfig
         with pytest.raises(ValueError, match="max_file_size"):
             ServerConfig(max_file_size=0)
 
@@ -129,20 +128,20 @@ class TestModelValidators:
 
     def test_overlap_less_than_chunk(self):
         """chunk_overlap < chunk_size 正常。"""
-        from app.core.settings import SplitterStrategy
+        from app.common.settings import SplitterStrategy
         s = SplitterStrategy(chunk_size=1000, chunk_overlap=200)
         assert s.chunk_size == 1000
         assert s.chunk_overlap == 200
 
     def test_overlap_equal_to_chunk_raises(self):
         """chunk_overlap == chunk_size 应报错。"""
-        from app.core.settings import SplitterStrategy
+        from app.common.settings import SplitterStrategy
         with pytest.raises(ValueError, match="chunk_overlap"):
             SplitterStrategy(chunk_size=500, chunk_overlap=500)
 
     def test_overlap_greater_than_chunk_raises(self):
         """chunk_overlap > chunk_size 应报错。"""
-        from app.core.settings import SplitterStrategy
+        from app.common.settings import SplitterStrategy
         with pytest.raises(ValueError, match="chunk_overlap"):
             SplitterStrategy(chunk_size=300, chunk_overlap=500)
 
@@ -156,7 +155,7 @@ class TestYamlLoading:
 
     def test_load_from_temp_yaml(self):
         """从临时 YAML 文件加载配置。"""
-        from app.core.settings import Settings
+        from app.common.settings import Settings
 
         config = {
             "server": {"port": 9000, "max_file_size": 10485760},
@@ -180,7 +179,7 @@ class TestYamlLoading:
 
     def test_load_from_nonexistent_yaml_returns_defaults(self):
         """YAML 文件不存在时返回全部默认值。"""
-        from app.core.settings import Settings
+        from app.common.settings import Settings
 
         settings = Settings.from_yaml("/nonexistent/path/surely/missing.yaml")
         assert settings.server.port == 8000
@@ -188,7 +187,7 @@ class TestYamlLoading:
 
     def test_load_from_invalid_yaml_raises_error(self):
         """非法 YAML 内容应报错。"""
-        from app.core.settings import Settings
+        from app.common.settings import Settings
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("{{{broken: yaml: }}")
@@ -202,7 +201,7 @@ class TestYamlLoading:
 
     def test_yaml_overrides_partial_config(self):
         """YAML 只覆盖部分字段，其余应保持默认。"""
-        from app.core.settings import Settings
+        from app.common.settings import Settings
 
         config = {"server": {"port": 8080}}
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
@@ -227,7 +226,7 @@ class TestEnvOverrides:
 
     def test_env_override_server_port(self, monkeypatch):
         """KS_SERVER__PORT 应覆盖默认端口。"""
-        from app.core.settings import Settings
+        from app.common.settings import Settings
 
         monkeypatch.setenv("KS_SERVER__PORT", "3000")
         settings = Settings()
@@ -235,7 +234,7 @@ class TestEnvOverrides:
 
     def test_env_override_database_host(self, monkeypatch):
         """KS_DATABASE__HOST 应覆盖数据库主机。"""
-        from app.core.settings import Settings
+        from app.common.settings import Settings
 
         monkeypatch.setenv("KS_DATABASE__HOST", "pg-prod.example.com")
         settings = Settings()
@@ -243,7 +242,7 @@ class TestEnvOverrides:
 
     def test_env_override_llm_provider(self, monkeypatch):
         """KS_LLM__PROVIDER 应覆盖 LLM 提供商。"""
-        from app.core.settings import Settings
+        from app.common.settings import Settings
 
         monkeypatch.setenv("KS_LLM__PROVIDER", "openai")
         settings = Settings()
@@ -259,7 +258,7 @@ class TestSettingsSingleton:
 
     def test_get_settings_returns_same_instance(self):
         """多次调用应返回同一个实例。"""
-        import app.core.settings as s
+        import app.common.settings as s
         s._settings = None
         s1 = s.get_settings()
         s2 = s.get_settings()
@@ -275,31 +274,31 @@ class TestEdgeCases:
 
     def test_port_minimum(self):
         """端口 = 1 应合法。"""
-        from app.core.settings import DatabaseConfig
+        from app.common.settings import DatabaseConfig
         cfg = DatabaseConfig(port=1)
         assert cfg.port == 1
 
     def test_port_maximum(self):
         """端口 = 65535 应合法。"""
-        from app.core.settings import DatabaseConfig
+        from app.common.settings import DatabaseConfig
         cfg = DatabaseConfig(port=65535)
         assert cfg.port == 65535
 
     def test_chunk_size_minimum(self):
         """chunk_size = 100 应合法。"""
-        from app.core.settings import SplitterStrategy
+        from app.common.settings import SplitterStrategy
         cfg = SplitterStrategy(chunk_size=100, chunk_overlap=0)
         assert cfg.chunk_size == 100
 
     def test_max_connections_minimum(self):
         """max_connections = 1 应合法。"""
-        from app.core.settings import DatabaseConfig
+        from app.common.settings import DatabaseConfig
         cfg = DatabaseConfig(max_connections=1)
         assert cfg.max_connections == 1
 
     def test_all_valid_embedding_dims(self):
         """所有合法的 embedding 维度都应通过。"""
-        from app.core.settings import VectorStoreConfig
+        from app.common.settings import VectorStoreConfig
         for dim in (384, 512, 768, 1024, 1536, 3072):
             cfg = VectorStoreConfig(embedding_dimensions=dim)
             assert cfg.embedding_dimensions == dim

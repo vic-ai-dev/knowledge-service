@@ -1,0 +1,26 @@
+{
+  "question": [
+    "What is China's primary financial regulatory body for the insurance industry?",
+    "What is the formula and regulatory requirement for the Comprehensive Solvency Ratio under C-ROSS?",
+    "How does CSM (Contractual Service Margin) work under IFRS 17?",
+    "What is the phone number masking rule specified in the data security standard?",
+    "What are the three pillars of C-ROSS?"
+  ],
+  "ground_truths": [
+    [
+      "National Financial Regulatory Administration (NFRA)."
+    ],
+    [
+      "Comprehensive Solvency Ratio = Actual Capital / Minimum Capital; requirement is at least 100%."
+    ],
+    [
+      "CSM represents unearned profit that is gradually released as insurance services are provided over time."
+    ],
+    [
+      "Middle 4 digits are hidden: 138****5678."
+    ],
+    [
+      "Pillar 1: Quantitative capital requirements; Pillar 2: Qualitative risk management (SARMRA); Pillar 3: Market discipline (information disclosure)."
+    ]
+  ]
+}

@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.libs.base.base_llm import BaseLLM, LLMResponse
-from app.libs.factory import LLMFactory
-from app.libs.llm import OpenAILLM, OllamaLLM, DeepSeekLLM
+from app.factory.base.base_llm import BaseLLM, LLMResponse
+from app.factory.factory import LLMFactory
+from app.factory.llm import OpenAILLM, OllamaLLM, DeepSeekLLM
 
 
 # =============================================================================
@@ -113,7 +113,7 @@ class TestOpenAILLM:
     @pytest.fixture
     def mock_openai_client(self):
         """Mock openai.AsyncClient 在 _get_client 中返回。"""
-        with patch("app.libs.llm.openai.AsyncClient") as mock_cls:
+        with patch("app.factory.llm.openai.AsyncClient") as mock_cls:
             client = AsyncMock()
             mock_cls.return_value = client
             yield client
@@ -232,7 +232,7 @@ class TestOllamaLLM:
     @pytest.fixture
     def mock_ollama_client(self):
         """Mock openai.AsyncClient in OllamaLLM。"""
-        with patch("app.libs.llm.ollama.AsyncClient") as mock_cls:
+        with patch("app.factory.llm.ollama.AsyncClient") as mock_cls:
             client = AsyncMock()
             mock_cls.return_value = client
             yield client
@@ -312,7 +312,7 @@ class TestDeepSeekLLM:
     @pytest.fixture
     def mock_deepseek_client(self):
         """Mock openai.AsyncClient in DeepSeekLLM。"""
-        with patch("app.libs.llm.deepseek.AsyncClient") as mock_cls:
+        with patch("app.factory.llm.deepseek.AsyncClient") as mock_cls:
             client = AsyncMock()
             mock_cls.return_value = client
             yield client

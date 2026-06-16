@@ -21,8 +21,8 @@ import argparse
 import asyncio
 import time
 
-from app.core.query_engine.hybrid_search import HybridSearch, HybridSearchError
-from app.core.query_engine.query_processor import QueryProcessor, QueryProcessorError
+from app.query_engine.hybrid_search import HybridSearch, HybridSearchError
+from app.query_engine import QueryProcessor, QueryProcessorError
 
 
 def _format_results(results: list, elapsed_ms: float) -> None:

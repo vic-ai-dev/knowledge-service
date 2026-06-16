@@ -4,12 +4,8 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   DashboardOutlined,
   FileTextOutlined,
-  RobotOutlined,
-  DatabaseOutlined,
-  CloudUploadOutlined,
-  HistoryOutlined,
-  SearchOutlined,
   BarChartOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 
 const { Sider, Content } = Layout;
@@ -17,11 +13,7 @@ const { Sider, Content } = Layout;
 const menuItems = [
   { key: '/overview', icon: <DashboardOutlined />, label: '系统总览' },
   { key: '/admin/documents', icon: <FileTextOutlined />, label: '文档中心' },
-  { key: '/assistant', icon: <RobotOutlined />, label: 'AI 知识检索' },
-  { key: '/documents', icon: <DatabaseOutlined />, label: '数据浏览器' },
-  { key: '/ingestion', icon: <CloudUploadOutlined />, label: 'Ingestion 管理' },
-  { key: '/ingestion/traces', icon: <HistoryOutlined />, label: 'Ingestion 追踪' },
-  { key: '/query', icon: <SearchOutlined />, label: 'Query 追踪' },
+  { key: '/query', icon: <SearchOutlined />, label: 'AI 知识检索' },
   { key: '/evaluation', icon: <BarChartOutlined />, label: '评估面板' },
 ];
 

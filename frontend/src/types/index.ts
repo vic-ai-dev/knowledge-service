@@ -19,6 +19,7 @@ export interface DocumentInfo {
   doc_type: DocType;
   file_size?: number;
   chunk_count: number;
+  status?: string;
   ingested_at?: string;
   updated_at?: string;
   is_deleted: boolean;
@@ -35,7 +36,6 @@ export interface ChunkRecord {
   embedding?: number[];
   created_at: string;
 }
-
 
 // ── 摄取 ──────────────────────────────────────────────────
 
@@ -71,13 +71,18 @@ export interface IngestionHistoryItem {
 export interface IngestionTrace {
   trace_id: string;
   source_path: string;
-  total_latency_ms: number;
+  title?: string;
+  category?: string;
+  language?: string;
+  doc_type?: string;
+  file_size?: number;
+  total_latency_ms: number | null;
   status: IngestionStatus;
   total_chunks: number;
   total_images: number;
   stages?: Record<string, unknown>;
-  error?: string;
-  created_at: string;
+  error?: string | null;
+  created_at: string | null;
 }
 
 // ── 查询 ──────────────────────────────────────────────────
@@ -109,6 +114,9 @@ export interface QueryResult {
 export interface QueryTrace {
   trace_id: string;
   user_query: string;
+  search_mode?: SearchMode;
+  rerank?: boolean;
+
   category?: Category;
   language?: Language;
   total_latency_ms: number;
@@ -118,9 +126,13 @@ export interface QueryTrace {
   cache_hit: boolean;
   rejected: boolean;
   rejection_reason?: string;
-  compliance_score?: number;
+  context_precision?: number;
+  context_recall?: number;
+  faithfulness?: number;
+  answer_relevancy?: number;
   stages?: Record<string, unknown>;
   top_k_results?: RetrievalResult[];
+    results?: RetrievalResult[];
   error?: string;
   created_at: string;
 }
@@ -133,7 +145,9 @@ export interface QueryMetrics {
   total_output_tokens: number;
   cache_hit_rate: number;
   rejection_rate: number;
-  avg_compliance_score: number;
+  avg_context_precision: number;
+  avg_faithfulness: number;
+  avg_answer_relevancy: number;
 }
 
 // ── 评估 ──────────────────────────────────────────────────
@@ -153,32 +167,12 @@ export interface EvalRunRequest {
 
 // ── AI 助手 ───────────────────────────────────────────────
 
-export interface AssistantQueryRequest {
-  query: string;
-  search_mode: SearchMode;
-  rerank: boolean;
-  session_id?: string;
-}
-
-export interface Conversation {
-  id: string;
-  title: string;
-  model: string;
-  message_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
   citations?: Array<{ chunk_id: string; text: string; source: string }>;
   token_count?: number;
   timestamp: string;
-}
-
-export interface ConversationDetail extends Conversation {
-  messages: Message[];
 }
 
 // ── 系统 ──────────────────────────────────────────────────
@@ -208,7 +202,6 @@ export interface SystemStats {
   by_language: Record<string, number>;
 }
 
-
 // ── Paginated API response wrapper ──────────────────────────
 export interface PaginatedResponse<T> {
   items: T[];
@@ -231,4 +224,10 @@ export interface CategoriesResponse {
 
 export interface LanguagesResponse {
   languages: CategoryItem[];
+}
+// ── BM25 Stats ────────────────────────────────────────────
+export interface Bm25Stat {
+  chunk_id: string;
+  doc_length: number;
+  unique_terms: number;
 }

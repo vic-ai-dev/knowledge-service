@@ -8,7 +8,6 @@ from app.api.system import router as system_router
 from app.api.data import router as data_router
 from app.api.ingestion import router as ingestion_router
 from app.api.query import router as query_router
-from app.api.assistant import router as assistant_router
 from app.api.documents import router as documents_router
 from app.api.evaluation import router as evaluation_router
 from app.api.images import router as images_router
@@ -22,7 +21,6 @@ api_router.include_router(system_router)
 api_router.include_router(data_router)
 api_router.include_router(ingestion_router)
 api_router.include_router(query_router)
-api_router.include_router(assistant_router)
 api_router.include_router(documents_router)
 api_router.include_router(evaluation_router)
 api_router.include_router(images_router)

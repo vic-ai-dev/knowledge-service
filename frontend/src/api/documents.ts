@@ -1,7 +1,8 @@
 import apiClient, { unwrapPaginated } from './client';
-import type { DocumentInfo, ChunkRecord, CategoriesResponse, LanguagesResponse } from '../types';
+import type { DocumentInfo, ChunkRecord, CategoriesResponse, LanguagesResponse, Bm25Stat } from '../types';
 
 export const listDocuments = (params?: {
+  search?: string;
   category?: string;
   language?: string;
   doc_type?: string;
@@ -47,3 +48,5 @@ export const getCategories = () =>
 
 export const getLanguages = () =>
   apiClient.get<LanguagesResponse>('/data/languages').then((r) => r.data.languages);
+export const getBm25Stats = (docId: string) =>
+  apiClient.get<{ items: Bm25Stat[]; total: number }>(`/documents/${docId}/bm25-stats`).then((r) => r.data);

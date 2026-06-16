@@ -4,17 +4,15 @@
 数据库配置从 settings.yaml 读取，不在 ini 中硬编码凭证。
 """
 
-from logging.config import fileConfig
-
 from sqlalchemy import create_engine, pool
 from alembic import context
 
 # ── 导入所有 ORM 模型以注册 Metadata ──
-from app.models.base import KnowledgeBase, RagBase
-import app.models  # noqa: F401 — 确保所有模型被导入
+from app.entity.base import KnowledgeBase, RagBase
+import app.entity  # noqa: F401 — 确保所有模型被导入
 
 # ── 导入 Settings ──
-from app.core.settings import get_settings
+from app.common.settings import get_settings
 
 config = context.config
 

@@ -1,0 +1,58 @@
+{
+  "question": [
+    "When translating a BRD item about 'sending reminders when renewal premium is insufficient', what technical details must the TRD define?",
+    "What is the 'Contract First' principle in API design?",
+    "What are the three quality gates for BRD submission?",
+    "What is the naming convention for Java constants? Give an example.",
+    "What are the three pillars of observability in the logging standard?",
+    "How many DDL change risk levels are there? Who approves L3 changes?",
+    "What are the recommended SLA targets for core system API response times?",
+    "What is the recommended feature branch lifetime in Trunk-Based Development?",
+    "What are the response time and escalation requirements for a P0 (disaster) incident?",
+    "What immediate actions must be taken for financial loss incidents?",
+    "What must be verified in the rollback plan before release?",
+    "What are the three types of performance tests and their recommended cadences?",
+    "What six design principles should test cases follow?"
+  ],
+  "ground_truths": [
+    [
+      "Trigger timing (T+N days), notification channels (SMS/App push/email), notification frequency (daily/one-time), and failure retry strategy."
+    ],
+    [
+      "Define interface documentation before implementing the code, ensuring both parties share the same understanding before development begins."
+    ],
+    [
+      "All business rules must cover normal and exception flows; accounting items must include journal entry examples; regulatory reporting items must include sample regulatory messages."
+    ],
+    [
+      "UPPER_SNAKE_CASE, all uppercase letters separated by underscores. Example: MAX_RETRY_COUNT."
+    ],
+    [
+      "Logging (discrete event records), Metrics (aggregatable numerical indicators), and Tracing (request-level call chain tracking)."
+    ],
+    [
+      "Three levels: L1 low, L2 medium, L3 high. L3 changes (dropping tables/columns, modifying primary keys, large table changes) require Architecture Review Board approval."
+    ],
+    [
+      "P50 < 500ms, P99 < 2000ms, error rate < 0.1% for core interfaces."
+    ],
+    [
+      "Feature branches should have a short lifetime, no more than 3 days."
+    ],
+    [
+      "P0 requires immediate response (0 minutes) and escalation within 10 minutes."
+    ],
+    [
+      "Immediate stop-loss (halt transactions/degrade functionality), notify finance department, preserve all logs and database snapshots, involve legal for loss and compliance assessment."
+    ],
+    [
+      "Application rollback steps (to previous version), database rollback scripts, data rollback trigger criteria, estimated RTO, and post-rollback data validity."
+    ],
+    [
+      "Regular load tests before major releases, peak stress tests 1 month before high season, and capacity assessments quarterly."
+    ],
+    [
+      "Equivalence partitioning, boundary value analysis, decision tables, state transition, exception scenarios, and data-driven testing."
+    ]
+  ]
+}

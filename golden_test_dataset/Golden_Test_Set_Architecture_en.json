@@ -1,0 +1,42 @@
+{
+  "question": [
+    "What is the target availability for core insurance systems?",
+    "What is the top priority principle for microservice decomposition?",
+    "What are the responsibilities and retention period of the ODS layer in data architecture?",
+    "What is the timeout and retry recommendation for synchronous queries between services?",
+    "How should a new ADR supersede an old one when a better approach emerges?",
+    "What are the main responsibilities of the Anti-Corruption Layer (ACL)?",
+    "What are the three data protection levels for sensitive information?",
+    "What is the standard real-time data pipeline architecture?",
+    "What algorithm does the gateway layer use for rate limiting?"
+  ],
+  "ground_truths": [
+    [
+      "At least 99.99%, annual downtime less than 53 minutes."
+    ],
+    [
+      "Business responsibility — grouping functionality within the same bounded context."
+    ],
+    [
+      "Raw data ingestion unchanged from source systems; retention of 30 days."
+    ],
+    [
+      "Timeout 3 seconds, 1 retry."
+    ],
+    [
+      "Create a new ADR to supersede the old one; never delete or modify accepted ADRs."
+    ],
+    [
+      "Translate legacy data structures to new domain models, provide interface contracts for new services, and isolate the impact of legacy system changes."
+    ],
+    [
+      "L4 Top Secret: encrypted store/transit; L3 Sensitive: encrypted store; L2 Internal: network isolation."
+    ],
+    [
+      "MySQL(Binlog) -> Canal -> Kafka -> Flink -> ClickHouse / Redis."
+    ],
+    [
+      "Token bucket algorithm."
+    ]
+  ]
+}

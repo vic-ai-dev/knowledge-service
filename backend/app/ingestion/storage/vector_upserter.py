@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.ingestion.models import ChunkRecord
-from app.libs.base.base_vector_store import BaseVectorStore
-from app.libs.factory import VectorStoreFactory
+from app.factory.base.base_vector_store import BaseVectorStore
+from app.factory.factory import VectorStoreFactory
 from app.common.log import get_logger
 
 logger = get_logger(__name__)
@@ -56,11 +56,11 @@ class VectorUpserter:
         """
         if chunk.embedding is None:
             raise VectorUpserterError(
-                f"chunk {chunk.chunk_id} has no embedding, encode first"
+                f"chunk {chunk.id} has no embedding, encode first"
             )
 
         return {
-            "id": chunk.chunk_id,
+            "id": chunk.id,
             "text": chunk.text,
             "metadata": chunk.metadata,
             "category": chunk.category,

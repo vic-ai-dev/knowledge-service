@@ -6,9 +6,9 @@
 """
 from __future__ import annotations
 import pytest
-from app.libs.base.base_evaluator import EvalMetrics
-from app.libs.evaluator.basic import BasicEvaluator
-from app.libs.evaluator.composite import CompositeEvaluator
+from app.factory.base.base_evaluator import EvalMetrics
+from app.factory.evaluator.basic import BasicEvaluator
+from app.factory.evaluator.composite import CompositeEvaluator
 pytestmark = pytest.mark.unit
 class TestBasicEvaluator:
     """BasicEvaluator 单元测试。"""
@@ -199,16 +199,16 @@ class TestRagasEvaluator:
     """RagasEvaluator 构造与导入测试（不调用 LLM）。"""
     def test_import_and_create(self):
         """验证 RagasEvaluator 可通过工厂创建。"""
-        from app.libs.evaluator.ragas_evaluator import RagasEvaluator
+        from app.factory.evaluator.ragas_evaluator import RagasEvaluator
         e = RagasEvaluator(llm="mock")  # 不触发实际 ChatOpenAI
         assert e.requires_llm is True
         assert e.requires_embeddings is False
         # 验证继承链
-        from app.libs.base.base_evaluator import BaseEvaluator
+        from app.factory.base.base_evaluator import BaseEvaluator
         assert isinstance(e, BaseEvaluator)
     def test_requires_answer(self):
         """不传 answer 时 evaluate 应抛出异常。"""
-        from app.libs.evaluator.ragas_evaluator import RagasEvaluator
+        from app.factory.evaluator.ragas_evaluator import RagasEvaluator
         e = RagasEvaluator(llm="mock")
         import pytest
         with pytest.raises(ValueError, match="answer"):
@@ -217,28 +217,28 @@ class TestRagasEvaluator:
 class TestEvaluatorFactory:
     """EvaluatorFactory 注册与创建测试。"""
     def test_has_all_registrations(self):
-        from app.libs.factory import EvaluatorFactory
+        from app.factory.factory import EvaluatorFactory
         assert "basic" in EvaluatorFactory._registry
         assert "ragas" in EvaluatorFactory._registry
         assert "composite" in EvaluatorFactory._registry
     def test_create_basic(self):
-        from app.libs.factory import EvaluatorFactory
+        from app.factory.factory import EvaluatorFactory
         e = EvaluatorFactory.create("basic")
-        from app.libs.evaluator.basic import BasicEvaluator
+        from app.factory.evaluator.basic import BasicEvaluator
         assert isinstance(e, BasicEvaluator)
     def test_create_ragas(self):
-        from app.libs.factory import EvaluatorFactory
+        from app.factory.factory import EvaluatorFactory
         # llm="mock" 跳过 ChatOpenAI 构造
         e = EvaluatorFactory.create("ragas", llm="mock")
-        from app.libs.evaluator.ragas_evaluator import RagasEvaluator
+        from app.factory.evaluator.ragas_evaluator import RagasEvaluator
         assert isinstance(e, RagasEvaluator)
     def test_create_unknown(self):
-        from app.libs.factory import EvaluatorFactory
+        from app.factory.factory import EvaluatorFactory
         import pytest
         with pytest.raises(ValueError, match="unknown"):
             EvaluatorFactory.create("unknown")
     def test_create_composite_requires_evaluators(self):
-        from app.libs.factory import EvaluatorFactory
+        from app.factory.factory import EvaluatorFactory
         import pytest
         with pytest.raises(TypeError):
             EvaluatorFactory.create("composite")

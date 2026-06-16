@@ -22,5 +22,5 @@ async def client():
 @pytest.fixture
 def sample_settings():
     """返回默认配置字典，用于测试配置加载。"""
-    from app.core.settings import Settings
+    from app.common.settings import Settings
     return Settings()

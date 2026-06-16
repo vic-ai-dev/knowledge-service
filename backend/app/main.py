@@ -7,19 +7,20 @@ warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API
 import time
 import uuid
 from contextlib import asynccontextmanager
+from app.common.telemetry import setup_telemetry
 
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 
-# 导入 libs 包以触发所有工厂注册
-import app.libs  # noqa: F401
+# 导入 factory 包以触发所有工厂注册
+import app.factory  # noqa: F401
 
-# 导入 models 包以触发 declarative base 注册
-import app.models  # noqa: F401
+# 导入 entity 包以触发 declarative base 注册
+import app.model.entity  # noqa: F401
 
-from app.core.settings import get_settings
+from app.common.settings import get_settings
 from app.common.log import setup_structlog, get_logger
 from app.api.websocket import ingestion_progress_endpoint
 
@@ -38,7 +39,7 @@ async def lifespan(app: FastAPI):
 
     # ── 初始化数据库连接池 ──
     try:
-        from app.core.database_sa import init_sa_engine
+        from app.common.database_sa import init_sa_engine
 
         await init_sa_engine()
         _logger.info("sa_engine_ready", message="SQLAlchemy 异步引擎初始化完成")
@@ -54,7 +55,7 @@ async def lifespan(app: FastAPI):
 
     # ── 关闭数据库连接池 ──
     try:
-        from app.core.database_sa import close_sa_engine
+        from app.common.database_sa import close_sa_engine
 
         await close_sa_engine()
         _logger.info("sa_engine_closed", message="SQLAlchemy 引擎已关闭")
@@ -97,7 +98,6 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def http_log_middleware(request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        set_request_id(request_id)
         start = time.monotonic()
 
         _logger.info(
@@ -175,6 +175,9 @@ def create_app() -> FastAPI:
             "mcp_mount_warning",
             message=f"MCP SSE 挂载失败，服务仍可运行: {e}",
         )
+
+    # ── 初始化 OpenTelemetry ──
+    setup_telemetry(app)
 
     return app
 

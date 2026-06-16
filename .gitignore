@@ -55,3 +55,6 @@ settings.yml
 
 # Codex
 .codex/
+
+# Runtime data
+backend/data/

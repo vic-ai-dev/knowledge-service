@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS ingestion_traces (
     trace_id        UUID PRIMARY KEY,
     source_path     TEXT NOT NULL,
     collection      TEXT DEFAULT 'default',
+    document_id     UUID,
     total_latency_ms INTEGER,
     status          TEXT CHECK (status IN ('completed', 'failed')),
     total_chunks    INTEGER,
@@ -120,6 +121,9 @@ COMMENT ON TABLE ingestion_traces IS 'Ingestion 追踪记录，stage 为 JSONB �
 CREATE TABLE IF NOT EXISTS query_traces (
     trace_id        UUID PRIMARY KEY,
     user_query      TEXT NOT NULL,
+    search_mode     TEXT,
+    rerank          BOOLEAN,
+
     collection      TEXT DEFAULT 'default',
     category        TEXT,
     language        TEXT,
@@ -133,6 +137,7 @@ CREATE TABLE IF NOT EXISTS query_traces (
     compliance_score FLOAT,
     stages          JSONB,
     top_k_results   JSONB,
+    results         TEXT,
     error           TEXT,
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -221,3 +226,11 @@ CREATE TABLE IF NOT EXISTS query_cache (
 
 CREATE INDEX idx_query_cache_expires ON query_cache(expires_at);
 
+
+-- ── Migration: Add search_mode / rerank to query_traces (for existing DBs) ──
+ALTER TABLE query_traces
+    ADD COLUMN IF NOT EXISTS search_mode TEXT,
+    ADD COLUMN IF NOT EXISTS rerank BOOLEAN;
+
+COMMENT ON COLUMN query_traces.search_mode IS '检索模式：vector_only / hybrid';
+COMMENT ON COLUMN query_traces.rerank IS '是否启用重排序器';

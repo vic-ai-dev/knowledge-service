@@ -68,7 +68,7 @@ class MetadataEnricher(BaseTransform):
                     chunk.metadata[key] = value
 
             # 确保 chunk_id 存在
-            if not chunk.chunk_id:
-                chunk.chunk_id = str(uuid.uuid4())
+            if not chunk.id:
+                chunk.id = str(uuid.uuid4())
 
         return chunks

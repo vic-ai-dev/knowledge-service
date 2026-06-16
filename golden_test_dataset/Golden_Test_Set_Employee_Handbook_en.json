@@ -1,0 +1,26 @@
+{
+  "question": [
+    "How long is the standard probation period for new employees?",
+    "How much notice is required when a regular employee resigns?",
+    "What social insurances does the company provide?",
+    "How does the company compensate overtime work?",
+    "Does the confidentiality obligation continue after employment ends?"
+  ],
+  "ground_truths": [
+    [
+      "Generally no more than 6 months."
+    ],
+    [
+      "30 days written notice."
+    ],
+    [
+      "Pension, medical, unemployment, work injury, maternity insurance, and housing fund."
+    ],
+    [
+      "150% for weekday overtime, 200% for weekend overtime, 300% for public holiday overtime."
+    ],
+    [
+      "Yes, confidentiality obligations remain valid even after leaving the company."
+    ]
+  ]
+}

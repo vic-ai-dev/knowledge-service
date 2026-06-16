@@ -5,8 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.settings import get_settings
-from app.core.database_sa import get_kb_session, get_rag_session
+from app.common.settings import get_settings
+from app.common.database_sa import get_kb_session, get_rag_session
 from app.repositories.document_repo import DocumentRepository
 from app.repositories.chunk_repo import DocumentChunkRepository
 from app.common.log import get_logger

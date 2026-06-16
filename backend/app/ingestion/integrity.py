@@ -13,15 +13,14 @@ import asyncio
 import hashlib
 import uuid
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import asyncpg
 
-from app.core.settings import get_settings
+from app.common.settings import get_settings
 from app.common.enums import Category, Language, DocType, IngestionStatus, IngestionTraceStatus
-from app.observability.telemetry import current_trace_uuid
+from app.common.telemetry import current_trace_uuid
 
 from app.common.log import get_logger
 
@@ -253,6 +252,7 @@ class FileIntegrityChecker:
     async def record_ingestion_trace(
         self,
         source_path: str,
+        document_id: str | None = None,
         total_latency_ms: float = 0.0,
         status: str = "",
         total_chunks: int = 0,
@@ -267,10 +267,11 @@ class FileIntegrityChecker:
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO ingestion_traces
-                   (trace_id, source_path, total_latency_ms, status,
+                   (trace_id, document_id, source_path, total_latency_ms, status,
                     total_chunks, total_images, stages, error)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)""",
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)""",
                 trace_id,
+                document_id,
                 source_path,
                 int(total_latency_ms),
                 status,

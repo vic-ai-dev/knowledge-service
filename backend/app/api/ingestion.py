@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import time
 import uuid
@@ -11,15 +12,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.settings import get_settings
-from app.core.database_sa import get_kb_session
+from app.common.settings import get_settings
+from app.common.database_sa import get_kb_session
 from app.repositories.ingestion_repo import IngestionHistoryRepository, IngestionTraceRepository
 from app.repositories.document_repo import DocumentRepository
 from app.ingestion.models import IngestionDocument
 from app.ingestion.pipeline import IngestionPipeline
 from app.common.log import get_logger
 from app.common.enums import CATEGORY_VALUES, LANGUAGE_VALUES, IngestionStatus
-from app.schemas.ingestion import IngestionHistoryListResponse, IngestionTraceListResponse
 import tempfile
 
 logger = get_logger(__name__)
@@ -70,6 +70,7 @@ async def upload_document(
     file: UploadFile = File(...),
     category: str = Form(""),
     language: str = Form(""),
+    kb_session: AsyncSession = Depends(get_kb_session),
 ):
     """上传文档文件。
 
@@ -79,6 +80,15 @@ async def upload_document(
     _check_rate_limit()
     content = await file.read()
     info = _validate_file(file.filename or "unknown", content)
+
+    # ── 文件完整性检查（SHA256 去重） ────────────
+    doc_repo = DocumentRepository(kb_session)
+    existing = await doc_repo.find_by_hash(info["sha256"])
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"文件已存在: {existing.title or existing.source_path} (SHA256: {info['sha256'][:16]}...)",
+        )
 
     # 校验 category / language
     _VALID_CATEGORIES = CATEGORY_VALUES
@@ -127,65 +137,40 @@ async def upload_document(
         file_hash=info["sha256"],
     )
 
-    # ── 创建 IngestionPipeline ─────────────────────────
-    pipeline = IngestionPipeline(
-        batch_processor=None,
-        vector_upserter=None,
-        integrity_checker=None,
-        progress_callback=None,
-    )
-
-    # ── 执行管线 ───────────────────────────────────────
-    run_start = time.monotonic()
-
-    try:
-        result = await pipeline.process_document(ingestion_doc, force=False)
-    except Exception as e:
-        elapsed = (time.monotonic() - run_start) * 1000
+    # ── 在后台异步执行管线 ─────────────────────────────
+    async def _run_background_pipeline(doc: IngestionDocument, directory: Path):
+        """后台运行 ingestion pipeline，完成后自动清理临时文件。"""
         import shutil
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        logger.error(
-            "upload_pipeline_error",
-            error=str(e),
-            metadata={
-                "filename": file.filename,
-                "elapsed_ms": round(elapsed, 2),
-            },
-        )
-        raise HTTPException(status_code=500, detail=f"文件处理失败: {e}")
-    finally:
-        import shutil
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        try:
+            pipeline = IngestionPipeline(
+                batch_processor=None,
+                vector_upserter=None,
+                integrity_checker=None,
+                progress_callback=None,
+            )
+            await pipeline.process_document(doc, force=False)
+            logger.info("background_pipeline_completed", metadata={"source": doc.source_path})
+        except Exception as e:
+            logger.error("background_pipeline_error", error=str(e), metadata={"source": doc.source_path})
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
 
-    # ── 处理结果 ───────────────────────────────────────
-    from app.observability.telemetry import current_trace_uuid
-    trace_id = str(current_trace_uuid() or uuid.uuid4())
+    asyncio.create_task(_run_background_pipeline(ingestion_doc, tmp_dir))
 
-    if result.status.value == IngestionStatus.COMPLETED.value:
-        status_msg = "completed"
-    elif result.status.value == IngestionStatus.SKIPPED.value:
-        status_msg = "skipped (already ingested)"
-    else:
-        status_msg = "failed"
-
-    stage_details = [
-        {"stage": s.stage, "duration_ms": round(s.duration_ms, 2), "items": s.items_processed}
-        for s in result.stages
-    ]
-
+    # ── 立即返回 ───────────────────────────────────────
     return JSONResponse(
-        status_code=200 if result.status.value in ("completed", "skipped") else 500,
+        status_code=200,
         content={
-            "task_id": result.run_id,
-            "trace_id": trace_id,
+            "task_id": str(uuid.uuid4()),
+            "trace_id": str(uuid.uuid4()),
             "filename": file.filename,
             "size": info["size"],
-            "status": status_msg,
-            "total_chunks": result.total_chunks,
-            "errors": result.errors,
-            "stages": stage_details,
-            "elapsed_ms": round((time.monotonic() - run_start) * 1000, 2),
-            "message": "文件处理完成" if result.status.value == IngestionStatus.COMPLETED.value else f"文件处理失败: {result.errors}",
+            "status": "processing",
+            "total_chunks": None,
+            "errors": [],
+            "stages": [],
+            "elapsed_ms": 0,
+            "message": "文件已提交处理，处理状态可在文档中心查看",
         },
     )
 
@@ -220,25 +205,61 @@ async def list_ingestion_history(
 @router.get("/traces")
 async def list_ingestion_traces(
     kb_session: AsyncSession = Depends(get_kb_session),
+    category: str | None = Query(None),
+    language: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
-    """列出 Ingestion 追踪记录（来自 ingestion_traces 表）。"""
-    repo = IngestionTraceRepository(kb_session)
-    rows, total = await repo.paginate(page=page, page_size=page_size)
+    """列出 Ingestion 追踪记录。
+
+    主数据源为 documents 表（总有数据），
+    同源 ingestion_traces 表数据自动 enrichment。
+    """
+    from app.repositories.document_repo import DocumentRepository
+    from app.model.entity.ingestion import IngestionTrace as IngestionTraceModel
+    from sqlalchemy import select
+
+    doc_repo = DocumentRepository(kb_session)
+
+    # 从 documents 表获取列表（总有数据）
+    docs, total = await doc_repo.find_all_active(
+        category=category,
+        language=language,
+        page=page,
+        page_size=page_size,
+    )
+
+    # 批量获取关联的 ingestion_traces
+    doc_paths = [d.source_path for d in docs]
+    traces_by_path: dict[str, IngestionTraceModel] = {}
+    if doc_paths:
+        stmt = select(IngestionTraceModel).where(
+            IngestionTraceModel.source_path.in_(doc_paths)
+        )
+        result = await kb_session.execute(stmt)
+        for t in result.scalars().all():
+            traces_by_path[t.source_path] = t
+
     items = []
-    for r in rows:
+    for doc in docs:
+        trace = traces_by_path.get(doc.source_path)
         items.append({
-            "trace_id": str(r.trace_id),
-            "source_path": r.source_path,
-            "total_latency_ms": r.total_latency_ms,
-            "status": r.status,
-            "total_chunks": r.total_chunks,
-            "total_images": r.total_images,
-            "stages": r.stages if r.stages else {},
-            "error": r.error,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "trace_id": str(doc.id),
+            "source_path": doc.source_path,
+            "title": doc.title,
+            "category": doc.category,
+            "language": doc.language,
+            "doc_type": doc.doc_type,
+            "file_size": doc.file_size,
+            "total_chunks": doc.chunk_count,
+            "total_images": doc.image_count,
+            "status": "completed" if not doc.is_deleted else "deleted",
+            "total_latency_ms": trace.total_latency_ms if trace else None,
+            "stages": trace.stages if trace and trace.stages else [],
+            "error": trace.error if trace else None,
+            "created_at": doc.ingested_at.isoformat() if doc.ingested_at else None,
         })
+
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
@@ -247,22 +268,66 @@ async def get_ingestion_trace(
     trace_id: str,
     kb_session: AsyncSession = Depends(get_kb_session),
 ):
-    """获取单条 Ingestion 追踪详情。"""
-    repo = IngestionTraceRepository(kb_session)
-    r = await repo.find_by_trace_id(trace_id)
-    if not r:
+    """获取单条 Ingestion 追踪详情。
+
+    优先查 ingestion_traces 表（详细管道数据），
+    回退到 documents 表（基础文档信息）。
+    """
+    from app.repositories.document_repo import DocumentRepository
+
+    trace_repo = IngestionTraceRepository(kb_session)
+
+    # 先查 ingestion_traces
+    r = await trace_repo.find_by_trace_id(trace_id)
+    if r:
+        return {
+            "trace_id": str(r.trace_id),
+            "source_path": r.source_path,
+            "total_latency_ms": r.total_latency_ms,
+            "status": r.status,
+            "total_chunks": r.total_chunks,
+            "total_images": r.total_images,
+            "stages": r.stages if r.stages else [],
+            "error": r.error,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+
+    # 再查：按 document_id 匹配（trace_id ≠ document_id 时的兼容）
+    r = await trace_repo.find_by_document_id(trace_id)
+    if r:
+        return {
+            "trace_id": str(r.trace_id),
+            "source_path": r.source_path,
+            "total_latency_ms": r.total_latency_ms,
+            "status": r.status,
+            "total_chunks": r.total_chunks,
+            "total_images": r.total_images,
+            "stages": r.stages if r.stages else [],
+            "error": r.error,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+
+    # 回退：按 document_id 查找
+    doc_repo = DocumentRepository(kb_session)
+    doc = await doc_repo.find_by_id(trace_id)
+    if not doc:
         raise HTTPException(status_code=404, detail="追踪记录不存在")
 
     return {
-        "trace_id": str(r.trace_id),
-        "source_path": r.source_path,
-        "total_latency_ms": r.total_latency_ms,
-        "status": r.status,
-        "total_chunks": r.total_chunks,
-        "total_images": r.total_images,
-        "stages": r.stages if r.stages else {},
-        "error": r.error,
-        "created_at": r.created_at.isoformat() if r.created_at else None,
+        "trace_id": str(doc.id),
+        "source_path": doc.source_path,
+        "title": doc.title,
+        "category": doc.category,
+        "language": doc.language,
+        "doc_type": doc.doc_type,
+        "file_size": doc.file_size,
+        "total_chunks": doc.chunk_count,
+        "total_images": doc.image_count,
+        "status": "completed" if not doc.is_deleted else "deleted",
+        "total_latency_ms": None,
+        "stages": {},
+        "error": None,
+        "created_at": doc.ingested_at.isoformat() if doc.ingested_at else None,
     }
    
 @router.get("/status/{run_id}")

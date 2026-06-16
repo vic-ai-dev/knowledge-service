@@ -1,33 +1,37 @@
 /* ============================================================================
- * Knowledge Service — RAG Query 页面 (G10)
- * 单次查询模式：搜索框 → 回答 + 引用 → 检索历史
+ * Knowledge Service — AI 知识检索 (G10+G11)
+ * 搜索框 → 回答 + 引用 + 查询历史 table (含 chunk popup)
  * ============================================================================ */
 
 import { useState, useCallback, useEffect } from 'react';
 import {
-  Card, Input, Button, List, Space, Segmented, Switch, Typography, Spin, Empty,
-  message, Flex, Tag, Pagination, Modal, Descriptions, Divider,
+  Card, Input, Segmented, Switch, Typography, Spin, Empty,
+  message, Flex, Tag, Button, Table, Modal, Descriptions, Divider, Row, Col, Statistic,
 } from 'antd';
 import {
-  SearchOutlined, RobotOutlined, LinkOutlined, ClockCircleOutlined,
-  FileTextOutlined, ThunderboltOutlined,
+  RobotOutlined, LinkOutlined, ClockCircleOutlined,
+  ReloadOutlined, CloseCircleOutlined, WarningOutlined, CheckCircleOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import type { SearchMode, QueryResult, QueryTrace } from '../types';
-import { askAssistant } from '../api/assistant';
-import { getQueryTraces, getQueryTraceDetail } from '../api/query';
+import { executeQuery, getQueryTraces } from '../api/query';
+import type { ColumnsType } from 'antd/es/table';
 
 const { Text, Paragraph, Title } = Typography;
+const PAGE_SIZE = 10;
 
-const PAGE_SIZE = 15;
+const fmtMs = (ms: number | null | undefined) => {
+  if (ms == null) return '—';
+  return ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${ms.toFixed(0)}ms`;
+};
 
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+const fmtTime = (iso: string | null | undefined) => {
+  if (!iso) return '-';
+  return new Date(iso).toISOString().replace('T', ' ').slice(0, 19);
+};
 
 export default function AIAssistant() {
-  // ── 查询状态 ──────────────────────────────────────────────
+  // ── 查询状态 ──
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
@@ -35,27 +39,26 @@ export default function AIAssistant() {
   const [rerankEnabled, setRerankEnabled] = useState(true);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // ── 检索历史状态 ──────────────────────────────────────────
+  // ── 检索历史 ──
   const [traces, setTraces] = useState<QueryTrace[]>([]);
-  const [tracesTotal, setTracesTotal] = useState(0);
+  const [total, setTotal] = useState(0);
   const [tracePage, setTracePage] = useState(1);
   const [tracesLoading, setTracesLoading] = useState(true);
 
-  // ── 详情弹窗 ──────────────────────────────────────────────
-  const [detailVisible, setDetailVisible] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailData, setDetailData] = useState<QueryTrace | null>(null);
+  // ── 详情弹窗 ──
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedTrace, setSelectedTrace] = useState<QueryTrace | null>(null);
 
-  // ── 数据加载 ──────────────────────────────────────────────
+  // ── 加载检索历史 ──
   const fetchTraces = useCallback(async (page: number) => {
     setTracesLoading(true);
     try {
       const result = await getQueryTraces({ page, page_size: PAGE_SIZE });
       setTraces(result.items);
-      setTracesTotal(result.total);
+      setTotal(result.total);
     } catch {
       setTraces([]);
-      setTracesTotal(0);
+      setTotal(0);
     } finally {
       setTracesLoading(false);
     }
@@ -65,14 +68,14 @@ export default function AIAssistant() {
     fetchTraces(tracePage);
   }, [fetchTraces, tracePage]);
 
-  // ── 查询 ──────────────────────────────────────────────────
+  // ── 搜索 ──
   const handleSearch = async () => {
     const q = query.trim();
     if (!q) return;
     setSearching(true);
     setHasSearched(true);
     try {
-      const result = await askAssistant({ query: q, search_mode: searchMode, rerank: rerankEnabled });
+      const result = await executeQuery({ query: q, search_mode: searchMode, rerank: rerankEnabled });
       setQueryResult(result);
       fetchTraces(1);
       setTracePage(1);
@@ -84,20 +87,58 @@ export default function AIAssistant() {
     }
   };
 
-  // ── 历史详情 ──────────────────────────────────────────────
-  const handleViewDetail = async (traceId: string) => {
-    setDetailVisible(true);
-    setDetailLoading(true);
-    try {
-      const detail = await getQueryTraceDetail(traceId);
-      setDetailData(detail);
-    } catch {
-      message.error('加载详情失败');
-      setDetailData(null);
-    } finally {
-      setDetailLoading(false);
-    }
+  // ── 打开详情 ──
+  const openDetail = (trace: QueryTrace) => {
+    setSelectedTrace(trace);
+    setDetailModalOpen(true);
   };
+
+  // ── 表格列 ──
+  const columns: ColumnsType<QueryTrace> = [
+    {
+      title: '查询', dataIndex: 'user_query', key: 'user_query', width: 220, ellipsis: true,
+      render: (v: string) => (
+        <Text ellipsis={{ tooltip: v }} style={{ maxWidth: 220, display: 'block' }}>{v}</Text>
+      ),
+    },
+    {
+      title: '延迟', dataIndex: 'total_latency_ms', key: 'total_latency_ms', width: 90,
+      sorter: (a, b) => a.total_latency_ms - b.total_latency_ms,
+      render: (v: number) => (
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtMs(v)}</span>
+      ),
+    },
+    {
+      title: '缓存', dataIndex: 'cache_hit', key: 'cache_hit', width: 60,
+      render: (v: boolean) => v
+        ? <Tag color="green" style={{ margin: 0 }}>命中</Tag>
+        : <Tag style={{ margin: 0 }}>未命中</Tag>,
+    },
+    {
+      title: '拒绝', dataIndex: 'rejected', key: 'rejected', width: 60,
+      render: (v: boolean) => v
+        ? <Tag color="red" style={{ margin: 0 }}>是</Tag>
+        : <Tag style={{ margin: 0 }}>否</Tag>,
+    },
+    {
+      title: '状态', key: 'status', width: 60,
+      render: (_: unknown, r: QueryTrace) => {
+        if (r.error) return <Tag icon={<CloseCircleOutlined />} color="error" style={{ margin: 0 }}>误</Tag>;
+        if (r.rejected) return <Tag icon={<WarningOutlined />} color="warning" style={{ margin: 0 }}>拒</Tag>;
+        return <Tag icon={<CheckCircleOutlined />} color="success" style={{ margin: 0 }}>✓</Tag>;
+      },
+    },
+    {
+      title: '时间', dataIndex: 'created_at', key: 'created_at', width: 170,
+      render: (v: string) => fmtTime(v),
+    },
+    {
+      title: '详情', key: 'action', width: 60,
+      render: (_: unknown, record: QueryTrace) => (
+        <Button type="link" size="small" onClick={() => openDetail(record)}>查看</Button>
+      ),
+    },
+  ];
 
   return (
     <div style={{ maxWidth: 960, margin: '0 auto' }}>
@@ -106,7 +147,7 @@ export default function AIAssistant() {
       {/* ── Settings Bar ──────────────────────────────────── */}
       <Card size="small" style={{ marginBottom: 20 }} styles={{ body: { padding: '8px 16px' } }}>
         <Flex align="center" justify="space-between" wrap="wrap" gap={8}>
-          <Space>
+          <Flex align="center" gap={8}>
             <Text strong style={{ fontSize: 13 }}>检索模式</Text>
             <Segmented<SearchMode>
               value={searchMode}
@@ -116,16 +157,16 @@ export default function AIAssistant() {
                 { value: 'hybrid', label: '混合检索' },
               ]}
             />
-          </Space>
-          <Space>
+          </Flex>
+          <Flex align="center" gap={8}>
             <Text style={{ fontSize: 13 }}>重排序</Text>
             <Switch checked={rerankEnabled} onChange={setRerankEnabled} size="small" />
-          </Space>
+          </Flex>
         </Flex>
       </Card>
 
       {/* ── Search Bar ────────────────────────────────────── */}
-      <div style={{ marginBottom: queryResult ? 24 : 48 }}>
+      <div style={{ marginBottom: queryResult ? 24 : 32 }}>
         <Input.Search
           size="large"
           placeholder="输入您的问题，检索知识库..."
@@ -196,126 +237,168 @@ export default function AIAssistant() {
         </div>
       )}
 
-      <Divider orientation="left" plain style={{ fontSize: 14, color: '#999' }}>
-        检索历史
-      </Divider>
-
-      {/* ── 检索历史 ──────────────────────────────────────── */}
-      <Card styles={{ body: { padding: 0 } }}>
-        {tracesLoading ? (
-          <Flex justify="center" style={{ padding: 40 }}>
-            <Spin />
-          </Flex>
+      <Card
+        title="查询历史"
+        styles={{ body: { padding: 0 } }}
+        extra={
+          <Button icon={<ReloadOutlined />} size="small" onClick={() => fetchTraces(tracePage)}>
+            刷新
+          </Button>
+        }
+      >
+        {tracesLoading && traces.length === 0 ? (
+          <Flex justify="center" style={{ padding: 40 }}><Spin /></Flex>
         ) : traces.length === 0 ? (
-          <Empty description="暂无检索历史" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: 40 }} />
+          <Empty description="暂无查询历史" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: 40 }} />
         ) : (
-          <List
+          <Table
+            columns={columns}
             dataSource={traces}
-            renderItem={(trace) => (
-              <List.Item
-                style={{ cursor: 'pointer', padding: '12px 16px' }}
-                onClick={() => handleViewDetail(trace.trace_id)}
-                extra={
-                  <Space size="small" wrap>
-                    {trace.rejected ? (
-                      <Tag color="red" style={{ fontSize: 11, margin: 0 }}>已拒绝</Tag>
-                    ) : (
-                      <Tag color="green" style={{ fontSize: 11, margin: 0 }}>通过</Tag>
-                    )}
-                    <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                      {trace.total_latency_ms}ms
-                    </Text>
-                    <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                      {formatTime(trace.created_at)}
-                    </Text>
-                  </Space>
-                }
-              >
-                <List.Item.Meta
-                  avatar={<FileTextOutlined style={{ color: '#7C3AED', fontSize: 16 }} />}
-                  title={
-                    <Text style={{ fontSize: 14 }} ellipsis={{ tooltip: trace.user_query }}>
-                      {trace.user_query}
-                    </Text>
-                  }
-                  description={
-                    <Space size="small" wrap>
-                      {trace.category && <Tag style={{ fontSize: 10, margin: 0 }}>{trace.category}</Tag>}
-                      {trace.language && <Tag style={{ fontSize: 10, margin: 0 }}>{trace.language}</Tag>}
-                      {trace.cache_hit && (
-                        <Tag icon={<ThunderboltOutlined />} color="blue" style={{ fontSize: 10, margin: 0 }}>
-                          缓存
-                        </Tag>
-                      )}
-                    </Space>
-                  }
-                />
-              </List.Item>
-            )}
+            rowKey="trace_id"
+            loading={tracesLoading}
+            scroll={{ x: 800 }}
+            pagination={{
+              current: tracePage,
+              total,
+              pageSize: PAGE_SIZE,
+              onChange: (p) => { setTracePage(p); fetchTraces(p); },
+              showSizeChanger: false,
+              size: 'small',
+            }}
+            locale={{ emptyText: <Empty description="暂无查询历史" /> }}
+            size="small"
           />
         )}
       </Card>
 
-      {/* ── 分页 ──────────────────────────────────────────── */}
-      {tracesTotal > PAGE_SIZE && (
-        <Flex justify="center" style={{ marginTop: 16 }}>
-          <Pagination
-            current={tracePage}
-            total={tracesTotal}
-            pageSize={PAGE_SIZE}
-            onChange={(p) => setTracePage(p)}
-            showSizeChanger={false}
-            size="small"
-          />
-        </Flex>
-      )}
-
       {/* ── 详情 Modal ────────────────────────────────────── */}
       <Modal
-        title="查询详情"
-        open={detailVisible}
-        onCancel={() => setDetailVisible(false)}
+        title={selectedTrace ? `Query Trace — ${selectedTrace.trace_id?.slice(0, 8)}...` : 'Query Trace 详情'}
+        open={detailModalOpen}
+        onCancel={() => { setDetailModalOpen(false); setSelectedTrace(null); }}
         footer={null}
-        width={640}
+        width={960}
       >
-        {detailLoading ? (
-          <Flex justify="center" style={{ padding: 40 }}><Spin /></Flex>
-        ) : detailData ? (
+        {selectedTrace && (
           <div>
-            <Descriptions column={2} size="small" bordered>
-              <Descriptions.Item label="查询内容" span={2}>
-                <Text copyable>{detailData.user_query}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="耗时">{detailData.total_latency_ms}ms</Descriptions.Item>
-              <Descriptions.Item label="Token 消耗">
-                {detailData.input_tokens} / {detailData.output_tokens} (共 {detailData.total_tokens})
-              </Descriptions.Item>
-              <Descriptions.Item label="缓存命中">
-                <Tag color={detailData.cache_hit ? 'green' : 'default'}>{detailData.cache_hit ? '是' : '否'}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="合规检查">
-                {detailData.rejected ? (
-                  <Tag color="red">{detailData.rejection_reason || '已拒绝'}</Tag>
-                ) : (
-                  <Tag color="green">通过 ({detailData.compliance_score ?? '-'})</Tag>
+            {/* 状态 & 基本信息 */}
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col>
+                {selectedTrace.error
+                  ? <Tag icon={<CloseCircleOutlined />} color="error" style={{ padding: '4px 12px' }}>错误</Tag>
+                  : selectedTrace.rejected
+                    ? <Tag icon={<WarningOutlined />} color="warning" style={{ padding: '4px 12px' }}>已拒绝</Tag>
+                    : <Tag icon={<CheckCircleOutlined />} color="success" style={{ padding: '4px 12px' }}>正常</Tag>
+                }
+              </Col>
+              <Col flex="auto">
+                <Text code style={{ fontSize: 12 }}>Trace ID: {selectedTrace.trace_id}</Text>
+              </Col>
+            </Row>
+
+            {/* Mode info */}
+            {selectedTrace.search_mode && (
+              <Row gutter={8} style={{ marginBottom: 16 }}>
+                <Col>
+                  <Tag color={selectedTrace.search_mode === 'hybrid' ? 'blue' : 'default'}>
+                    {selectedTrace.search_mode === 'hybrid' ? '混合检索' : '仅向量检索'}
+                  </Tag>
+                </Col>
+                {selectedTrace.rerank != null && (
+                  <Col>
+                    <Tag color={selectedTrace.rerank ? 'purple' : 'default'}>
+                      重排序: {selectedTrace.rerank ? '启用' : '关闭'}
+                    </Tag>
+                  </Col>
                 )}
+              </Row>
+            )}
+
+            {/* Pipeline Overview */}
+            <h4 style={{ marginBottom: 12 }}>📊 Pipeline Overview</h4>
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col span={8}>
+                <Card size="small">
+                  <Statistic title="总延迟" value={fmtMs(selectedTrace.total_latency_ms)} valueStyle={{ fontSize: 16 }} />
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card size="small">
+                  <Statistic
+                    title="Tokens"
+                    value={`${selectedTrace.input_tokens || 0} → ${selectedTrace.output_tokens || 0}`}
+                    valueStyle={{ fontSize: 14 }}
+                  />
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card size="small">
+                  <Statistic
+                    title="符合率"
+                    value={selectedTrace.faithfulness != null
+                      ? `${(selectedTrace.faithfulness * 100).toFixed(0)}%`
+                      : '-'}
+                    valueStyle={{ fontSize: 16 }}
+                  />
+                </Card>
+              </Col>
+            </Row>
+
+            {/* 查询 & 响应 */}
+            <Descriptions size="small" column={1} bordered style={{ marginBottom: 16 }}>
+              <Descriptions.Item label={<><SearchOutlined /> 查询</>}>
+                <Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{selectedTrace.user_query}</Paragraph>
               </Descriptions.Item>
-              <Descriptions.Item label="Trace ID" span={2}>
-                <Text copyable style={{ fontSize: 12 }}>{detailData.trace_id}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="时间" span={2}>
-                {formatTime(detailData.created_at)}
+              <Descriptions.Item label={<><RobotOutlined /> 响应</>}>
+                {selectedTrace.results ? (
+                  <Paragraph ellipsis={{ rows: 3, expandable: true, symbol: '展开' }} style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                    {selectedTrace.results}
+                  </Paragraph>
+                ) : (
+                  <Text type="secondary">—</Text>
+                )}
               </Descriptions.Item>
             </Descriptions>
 
-            {detailData.error && (
-              <div style={{ marginTop: 12 }}>
-                <Text type="danger">{detailData.error}</Text>
-              </div>
+            {/* Top-K 检索结果 */}
+            {selectedTrace.top_k_results && selectedTrace.top_k_results.length > 0 && (
+              <>
+                <Divider style={{ margin: '16px 0' }} />
+                <h4 style={{ marginBottom: 12 }}>📄 Top-K 检索结果</h4>
+                <Table
+                  dataSource={selectedTrace.top_k_results.slice(0, 10)}
+                  rowKey={(r: any) => r.chunk_id || Math.random()}
+                  pagination={false}
+                  size="small"
+                  columns={[
+                    { title: 'Chunk ID', dataIndex: 'chunk_id', key: 'chunk_id', ellipsis: true, width: 200 },
+                    { title: '文本', dataIndex: 'text', key: 'text', ellipsis: true },
+                    { title: '评分', dataIndex: 'score', key: 'score', width: 80, render: (v: number) => v?.toFixed(4) },
+                  ]}
+                />
+              </>
             )}
+
+            {/* 元信息 */}
+            <Descriptions size="small" column={2} bordered style={{ marginTop: 16 }}>
+              <Descriptions.Item label="缓存命中">
+                {selectedTrace.cache_hit ? <Tag color="green">是</Tag> : <Tag>否</Tag>}
+              </Descriptions.Item>
+              <Descriptions.Item label="时间">{fmtTime(selectedTrace.created_at)}</Descriptions.Item>
+              <Descriptions.Item label="Input Tokens">{selectedTrace.input_tokens ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="Output Tokens">{selectedTrace.output_tokens ?? '-'}</Descriptions.Item>
+              {selectedTrace.rejection_reason && (
+                <Descriptions.Item label="拒绝原因" span={2}>
+                  <Tag color="red">{selectedTrace.rejection_reason}</Tag>
+                </Descriptions.Item>
+              )}
+              {selectedTrace.error && (
+                <Descriptions.Item label="错误" span={2}>
+                  <Text type="danger">{selectedTrace.error}</Text>
+                </Descriptions.Item>
+              )}
+            </Descriptions>
           </div>
-        ) : (
-          <Empty description="无法加载详情" />
         )}
       </Modal>
     </div>

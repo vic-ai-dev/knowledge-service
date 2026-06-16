@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy import func, select, delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.chunk import DocumentChunk
+from app.model.entity.chunk import DocumentChunk
 from app.repositories.base import BaseRepository
 
 

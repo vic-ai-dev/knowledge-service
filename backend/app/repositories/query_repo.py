@@ -8,7 +8,7 @@ from sqlalchemy import func, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import text
 
-from app.models.query import QueryTrace
+from app.model.entity.query import QueryTrace
 from app.repositories.base import BaseRepository
 
 
@@ -51,7 +51,10 @@ class QueryTraceRepository(BaseRepository[QueryTrace]):
                 COALESCE(SUM(output_tokens), 0)::bigint AS total_output_tokens,
                 COALESCE(AVG(CASE WHEN cache_hit THEN 1.0 ELSE 0.0 END), 0)::float AS cache_hit_rate,
                 COALESCE(AVG(CASE WHEN rejected THEN 1.0 ELSE 0.0 END), 0)::float AS rejection_rate,
-                COALESCE(AVG(compliance_score), 0)::float AS avg_compliance_score
+                COALESCE(AVG(context_precision), 0)::float AS avg_context_precision,
+                COALESCE(AVG(context_recall), 0)::float AS avg_context_recall,
+                COALESCE(AVG(faithfulness), 0)::float AS avg_faithfulness,
+                COALESCE(AVG(answer_relevancy), 0)::float AS avg_answer_relevancy
             FROM query_traces
             WHERE created_at > NOW() - INTERVAL '24 hours'
         """)
@@ -66,7 +69,10 @@ class QueryTraceRepository(BaseRepository[QueryTrace]):
                 "total_output_tokens": 0,
                 "cache_hit_rate": 0.0,
                 "rejection_rate": 0.0,
-                "avg_compliance_score": 0.0,
+                "avg_context_precision": 0.0,
+                "avg_context_recall": 0.0,
+                "avg_faithfulness": 0.0,
+                "avg_answer_relevancy": 0.0,
             }
 
         return {
@@ -77,7 +83,10 @@ class QueryTraceRepository(BaseRepository[QueryTrace]):
             "total_output_tokens": row.total_output_tokens,
             "cache_hit_rate": row.cache_hit_rate,
             "rejection_rate": row.rejection_rate,
-            "avg_compliance_score": row.avg_compliance_score,
+            "avg_context_precision": row.avg_context_precision,
+            "avg_context_recall": row.avg_context_recall,
+            "avg_faithfulness": row.avg_faithfulness,
+            "avg_answer_relevancy": row.avg_answer_relevancy,
         }
 
 

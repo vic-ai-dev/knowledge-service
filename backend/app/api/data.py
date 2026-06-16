@@ -5,10 +5,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database_sa import get_kb_session, get_rag_session
+from app.common.database_sa import get_kb_session, get_rag_session
 from app.repositories.document_repo import DocumentRepository
 from app.repositories.chunk_repo import DocumentChunkRepository
-from app.models.chunk import DocumentChunk
+from app.model.entity.chunk import DocumentChunk
 from app.common.log import get_logger
 
 logger = get_logger(__name__)

@@ -31,7 +31,7 @@ graph TB
     subgraph BE["后端层 (FastAPI)"]
         REST["REST API /api/*"]
         MCP_SRV["MCP SSE /mcp/sse"]
-        WS_SRV["WebSocket /api/ws/*"]
+        
         API_Layer["API 路由层"]
         Srv["Service 层 (DocumentManager / QueryEngine / EvalRunner)"]
         RAG["RAG 引擎 (Ingestion Pipeline / Query Engine / Libs)"]
@@ -44,10 +44,8 @@ graph TB
 
     REACT -->|HTTP REST| REST
     MCPC -->|MCP/SSE| MCP_SRV
-    REACT -->|WebSocket| WS_SRV
     REST --> API_Layer
     MCP_SRV --> API_Layer
-    WS_SRV --> API_Layer
     API_Layer --> Srv
     Srv --> RAG
     RAG --> PG
@@ -59,10 +57,10 @@ graph TB
 | 维度 | 目标 |
 |------|------|
 | **后端** | FastAPI 统一 HTTP 入口，同时提供 REST API（供前端）和 MCP SSE Transport（供 Copilot/Claude） |
-| **前端** | React + TypeScript + Ant Design 5 构建 8 页可视化管理平台 |
+| **前端** | React + TypeScript + Ant Design 5 构建 6 页可视化管理平台 |
 | **RAG 引擎** | 全链路可插拔架构，支持 Ingestion 摄取与 Query 检索双链路 |
 | **存储** | PostgreSQL 存储业务数据，pgvector 扩展存储向量，支持多种文档类型（员工手册、合规指南、技术规范、架构文档）与中英文双语 |
-| **可观测性** | structlog 结构化日志 + TraceContext 驱动，全链路白盒追踪 |
+| **可观测性** | 结构化日志（ISO 8601 + 固定字段）+ OpenTelemetry 分布式追踪 + 全链路白盒追踪 |
 | **性能** | P90 端到端延迟 < 10s，单实例 ≥ 5 并发请求 |
 | **部署** | 本地开发优先，单进程启动 |
 
@@ -111,18 +109,16 @@ sequenceDiagram
 
 ### 2.3 React 可视化管理平台
 
-由 8 个功能页面组成的 SPA：
+由 6 个功能页面组成的 SPA（4 个主菜单项 + 2 个次级路由页）：
 
-| 页面 | 路由 | 核心功能 |
-|------|------|---------|
-| 系统总览 (Overview) | `/overview` | 组件配置卡片、数据资产统计、健康状态 |
-| 文档中心 (Document Center) | `/admin/documents` | 文档库管理、文件上传、批量操作、集合管理、状态监控 |
-| AI 知识助手 | `/assistant` | 对话式智能问答（支持向量/混合两种检索模式、可开关重排序）、引用溯源、对话历史管理 |
-| 数据浏览器 (Data Browser) | `/documents` | 文档列表（按类型/语言筛选）、Chunk 详情 |
-| Ingestion 管理 | `/ingestion` | 文件上传（自动识别类型）、摄取进度、文档删除 |
-| Ingestion 追踪 | `/ingestion/traces` | 摄取历史、阶段瀑布图 |
-| Query 追踪 | `/query` | 查询历史、Dense/Sparse 对比、Rerank 变化、p50/p95 延迟、令牌用量、缓存命中率、拒绝率、答案符合率 |
-| 评估面板 | `/evaluation` | 评估运行、指标展示、历史趋势 |
+| 页面 | 路由 | 菜单项 | 核心功能 |
+|------|------|--------|---------|
+| 系统总览 (Overview) | `/overview` | ✅ | 组件配置卡片、数据资产统计、健康状态 |
+| 文档中心 (Document Center) | `/admin/documents` | ✅ | 文档库管理、文件上传、批量操作、集合管理、状态监控 |
+| AI 知识检索 | `/query` | ✅ | 对话式智能问答（支持向量/混合两种检索模式、可开关重排序）、引用溯源、对话历史管理、查询历史追踪 |
+| 数据浏览器 (Data Browser) | `/documents` | — | 文档列表（按类型/语言筛选）、Chunk 详情 |
+| Ingestion 管理 | `/ingestion` | — | 文件上传（自动识别类型）、摄取进度、文档删除 |
+| 评估面板 | `/evaluation` | ✅ | 评估运行、指标展示、历史趋势 |
 
 ### 2.4 RAG 策略与设计亮点
 
@@ -219,35 +215,8 @@ flowchart LR
 | `tags` | 标签 | MetadataEnricher 生成 |
 
 ### 2.7 多模态图片处理
- 
+
 > ❌ 当前因不具备 Vision LLM API 暂不实现此功能，详见 TODO 清单
- 
-
-### 2.8 结构化日志体系
-
-采用 structlog 替代标准 logging，统一 JSON 格式输出，覆盖全链路追踪：
-
-```mermaid
-flowchart LR
-    subgraph Sources["日志来源"]
-        HTTP["HTTP 请求/响应<br/>event_type: http_request / http_response"]
-        LLM_CALL["LLM 调用<br/>event_type: llm_call"]
-        RETRIEVAL["检索过程<br/>event_type: retrieval"]
-        ERROR["异常<br/>event_type: error"]
-    end
-    subgraph Fields["固定字段"]
-        TS["timestamp / level / service"]
-        TRACE["trace_id / span_id / parent_span_id"]
-        REQ["request_id / event_type / message"]
-        META["metadata / error / stack_trace"]
-    end
-    subgraph Output["输出"]
-        JSON["JSON Lines<br/>logs/service.jsonl"]
-        LOGROTATE["logrotate<br/>按大小/时间轮转"]
-    end
-    Sources --> Fields
-    Fields --> Output
-```
 
 ---
 
@@ -274,7 +243,7 @@ flowchart LR
     DEFAULT --> TRANS
     TRANS["Transform<br/>Refine + Enrich + Caption"]
     TRANS --> EMBED["Embedding<br/>Dense + Sparse"]
-    EMBED --> UPSERT["Upsert<br/>pgvector + PostgreSQL + pg_bm25"]
+    EMBED --> UPSERT["Upsert<br/>pgvector + PostgreSQL + BM25Indexer"]
 ```
 
 **Loader 阶段**：
@@ -306,15 +275,15 @@ flowchart LR
 
 **Upsert 阶段**：
 - **pgvector**：存储 Dense Vector + Chunk Content + Metadata，使用 PostgreSQL 的 `vector` 数据类型
-- **pg_bm25 Index**：基于 pg_bm25 扩展的关键词倒排索引，存储在 PostgreSQL 中
+- **BM25 Index**：自研 BM25 倒排索引（SparseEncoder → BM25Indexer），持久化到 `data/db/bm25/` JSON 文件，支持增量更新和原子写，服务重启后从磁盘加载
 - **Image Storage**：图片文件存储在本地文件系统
 - 幂等设计：`chunk_id = hash(source_path + section_path + content_hash)`
 
 **文档生命周期管理** (`DocumentManager`)：
-- `list_documents()` — 按 category / language 筛选列出文档
-- `get_document_detail()` — 获取文档详情及所有 Chunk
-- `delete_document()` — 跨存储协调删除（pgvector + pg_bm25 + Image + PostgreSQL）
-- `get_collection_stats()` — 按 category 统计
+- `list_documents` — 按 category / language 筛选列出文档
+- `get_document_detail` — 获取文档详情及所有 Chunk
+- `delete_document` — 跨存储协调删除（pgvector + BM25Indexer + Image + PostgreSQL）
+- `get_collection_stats` — 按 category 统计
 
 #### 3.1.2 检索流水线 (Query Pipeline)
 
@@ -358,7 +327,7 @@ flowchart TB
         REST["/api/*<br/>REST API"]
         MCP["/mcp/sse<br/>MCP SSE Transport"]
         DOCS["/docs<br/>Swagger UI"]
-        WS_API["/api/ws/*<br/>WebSocket"]
+
     end
     subgraph Deps["依赖注入"]
         SETTINGS["Settings"]
@@ -374,7 +343,7 @@ flowchart TB
     end
     REST --> Deps
     MCP --> Deps
-    WS_API --> Deps
+
     Deps --> Core
 ```
 
@@ -382,48 +351,40 @@ flowchart TB
 
 | 分组 | 方法 | 路径 | 描述 |
 |------|------|------|------|
-| 健康检查 | `GET` | `/api/health` | 服务健康状态 |
-| 系统配置 | `GET` | `/api/config` | 获取当前组件配置 |
-| 系统统计 | `GET` | `/api/stats` | 数据资产统计（按 category / language） |
-| 集合列表 | `GET` | `/api/collections` | 列举所有集合 |
-| 文档列表 | `GET` | `/api/documents` | 分页+筛选（category / language / doc_type） |
-| 文档详情 | `GET` | `/api/documents/{doc_id}` | 文档信息 |
-| 更新文档 | `PUT` | `/api/documents/{doc_id}` | 更新文档 metadata（title / category / language） |
-| 文档统计 | `GET` | `/api/documents/stats` | 文档综合统计（按分类/语言/状态） |
-| 批量删除 | `POST` | `/api/documents/batch-delete` | 批量删除文档 |
-| 重新索引 | `POST` | `/api/documents/{doc_id}/reindex` | 重新摄取指定文档 |
-| 文档 Chunks | `GET` | `/api/documents/{doc_id}/chunks` | 文档的所有 Chunk |
-| Chunk 详情 | `GET` | `/api/chunks/{chunk_id}` | 单个 Chunk |
-| 创建集合 | `POST` | `/api/collections` | 创建新集合 |
-| 删除集合 | `DELETE` | `/api/collections/{name}` | 删除空集合 |
-| 上传文件 | `POST` | `/api/ingestion/upload` | 文件上传到暂存 |
-| 触发摄取 | `POST` | `/api/ingestion/run` | 执行摄取 Pipeline |
-| 摄取进度 | `GET` | `/api/ingestion/status/{run_id}` | 摄取进度查询 |
-| 摄取历史 | `GET` | `/api/ingestion/history` | 历史摄取记录 |
-| 删除文档 | `DELETE` | `/api/documents/{doc_id}` | 跨存储删除 |
-| 执行查询 | `POST` | `/api/query` | 混合检索查询 |
-| 查询历史 | `GET` | `/api/query/traces` | 查询记录列表 |
-| 查询追踪 | `GET` | `/api/query/traces/{trace_id}` | 单次查询详情 |
-| 查询指标 | `GET` | `/api/query/metrics?period=24h` | 聚合指标：p50/p95 延迟、令牌用量、缓存命中率、拒绝率、答案符合率 |
-| Ingestion 追踪 | `GET` | `/api/ingestion/traces` | 摄取历史列表 |
-| Ingestion 详情 | `GET` | `/api/ingestion/traces/{trace_id}` | 单次摄取详情 |
-| 触发评估 | `POST` | `/api/evaluation/run` | 执行评估任务 |
-| 评估结果 | `GET` | `/api/evaluation/results` | 评估结果列表 |
-| 评估详情 | `GET` | `/api/evaluation/results/{id}` | 单个评估结果 |
-| 评估趋势 | `GET` | `/api/evaluation/history` | 历史趋势数据 |
-| 图片服务 | `GET` | `/api/images/{collection}/{image_id}` | 图片文件 |
+| 系统状态 | `GET` | `/api/system/config` | 获取当前组件配置 |
+| 系统状态 | `GET` | `/api/system/stats` | 数据资产统计（按 category / language） |
+| 数据浏览 | `GET` | `/api/data/documents` | 文档列表（分页，可选 category / language / doc_type 筛选） |
+| 数据浏览 | `GET` | `/api/data/categories` | 按 category 统计文档数 |
+| 数据浏览 | `GET` | `/api/data/languages` | 按 language 统计文档数 |
+| 数据浏览 | `GET` | `/api/data/chunks` | 分块列表（支持 doc_id 筛选） |
+| 数据浏览 | `GET` | `/api/data/chunks/{chunk_id}` | 单个 Chunk 详情 |
+| 文档操作 | `GET` | `/api/documents` | 文档列表（分页 + 筛选） |
+| 文档操作 | `GET` | `/api/documents/{doc_id}` | 文档信息 |
+| 文档操作 | `PUT` | `/api/documents/{doc_id}` | 更新文档 metadata（title / category / language） |
+| 文档操作 | `DELETE` | `/api/documents/{doc_id}` | 删除文档（跨存储协调） |
+| 文档操作 | `POST` | `/api/documents/{doc_id}/reindex` | 重新摄取指定文档 |
+| 文档操作 | `GET` | `/api/documents/{doc_id}/chunks` | 文档的所有 Chunk |
+| 文档操作 | `GET` | `/api/documents/{doc_id}/bm25-stats` | BM25 索引统计 |
+| 文档操作 | `POST` | `/api/documents/batch-delete` | 批量删除文档 |
+| 文档操作 | `GET` | `/api/documents/stats` | 文档综合统计（按分类/语言/状态） |
+| 摄取管理 | `POST` | `/api/ingestion/upload` | 文件上传（类型白名单 + 大小限制 + 限流） |
+| 摄取管理 | `GET` | `/api/ingestion/history` | 历史摄取记录 |
+| 摄取管理 | `GET` | `/api/ingestion/status/{run_id}` | 摄取进度查询 |
+| 摄取管理 | `GET` | `/api/ingestion/traces` | 摄取追踪列表 |
+| 摄取管理 | `GET` | `/api/ingestion/traces/{trace_id}` | 单次摄取追踪详情 |
+| AI 知识检索 | `POST` | `/api/query/search` | 智能问答（检索模式: vector_only/hybrid + 可选重排序 + LLM 总结回答） |
+| AI 知识检索 | `GET` | `/api/query/traces` | 查询记录列表 |
+| AI 知识检索 | `GET` | `/api/query/traces/{trace_id}` | 单次查询详情 |
+| AI 知识检索 | `GET` | `/api/query/traces/metrics` | 聚合指标：p50/p95 延迟、令牌用量、缓存命中率、拒绝率、答案符合率 |
+| 评估管理 | `GET` | `/api/evaluation/testsets` | 黄金测试集列表 |
+| 评估管理 | `POST` | `/api/evaluation/testsets` | 创建测试集 |
+| 评估管理 | `DELETE` | `/api/evaluation/testsets/{test_set_id}` | 删除测试集 |
+| 评估管理 | `POST` | `/api/evaluation/run` | 执行评估任务 |
+| 评估管理 | `GET` | `/api/evaluation/results` | 评估结果列表 |
+| 图片服务 | `GET` | `/api/images/{image_id}` | 图片文件内容 |
+| 图片服务 | `GET` | `/api/images/{image_id}/metadata` | 图片元信息 |
 
-**文件上传约束**（适用于 `POST /api/ingestion/upload`）：
-- **类型白名单**：仅允许 `pdf` / `md` / `html` 三种格式
-- **大小上限**：默认 50MB（可通过 `settings.yaml` 的 `max_file_size` 配置）
-- **速率限制**：每分钟最多上传 10 次（FastAPI 中间件层实现）
-- **文件去重**：同名文件覆盖前检查 SHA256，内容未变则跳过
-| AI 问答 | `POST` | `/api/assistant/query` | 智能问答（检索模式: vector_only/hybrid + 可选重排序 + LLM 总结回答） |
-| 对话列表 | `GET` | `/api/assistant/history` | 对话历史列表 |
-| 对话详情 | `GET` | `/api/assistant/history/{conv_id}` | 单次对话详情（含全部消息） |
-| 删除对话 | `DELETE` | `/api/assistant/history/{conv_id}` | 删除对话 |
-
-**`POST /api/assistant/query` 请求体：**
+**`POST /api/query/search` 请求体：**
 
 ```json
 {
@@ -444,39 +405,11 @@ flowchart TB
 - 当全局禁用时，`rerank` 参数无效（固定为 false）
 - 当全局启用时，`rerank` 参数默认为 true，可单次关闭
 
-#### 3.2.3 WebSocket 实时推送
-
-提供 Ingestion Pipeline 进度实时推送，前端通过 WebSocket 连接订阅运行状态。适用于大文件摄取时的异步进度展示场景。
-
-**端点**：
-
-| 端点 | 方向 | 描述 |
-|------|------|------|
-| `WS /api/ws/ingestion/{run_id}` | 服务端→客户端 | Pipeline 执行进度实时推送 |
-
-**事件格式**：
-
-```json
-{
-  "event": "progress",
-  "data": {
-    "run_id": "uuid",
-    "stage": "loading / splitting / embedding / indexing",
-    "progress": 0.45,
-    "message": "正在处理 Chunk 45/100"
-  }
-}
-```
-
-**事件类型**：
-
-| 事件 | 说明 |
-|------|------|
-| `progress` | Pipeline 阶段进度更新 |
-| `complete` | 整个 Pipeline 执行完成 |
-| `error` | 执行过程中发生错误 |
-
-**实现方式**：FastAPI 原生 WebSocket 端点，Pipeline 执行中通过 `on_progress` 回调广播状态。
+**文件上传约束**（适用于 `POST /api/ingestion/upload`）：
+- **类型白名单**：仅允许 `pdf` / `md` / `html` 三种格式
+- **大小上限**：默认 50MB（可通过 `settings.yaml` 的 `max_file_size` 配置）
+- **速率限制**：每分钟最多上传 10 次（FastAPI 中间件层实现）
+- **文件去重**：同名文件覆盖前检查 SHA256，内容未变则跳过
 
 #### 3.2.4 MCP SSE Transport
 
@@ -517,7 +450,7 @@ flowchart TB
 | 用途 | Dense Vector 语义检索 |
 | 扩展 | `pgvector`（提供 `vector` 数据类型与 `<=>` 距离算子） |
 
-**pg_bm25（全文检索数据）**：
+**BM25（全文检索数据）**：
 
 | 项目 | 值 |
 |------|-----|
@@ -526,8 +459,8 @@ flowchart TB
 | 密码 | `root123456` |
 | 数据库 | `knowledge_rag` |
 | 用途 | 全文检索 + BM25 倒排索引 |
-| 扩展 | `pg_bm25` + `pg_search`（提供 BM25 索引与全文检索能力，基于 `pg_bm25` 扩展支持 BM25 算法，基于 `pg_search` 扩展支持全文检索与混合搜索） |
-
+| 索引目录 | `data/db/bm25/`（JSON 文件持久化） |
+| 引擎 | `BM25Indexer`（自研 BM25 + SparseEncoder）基于 jieba 分词 + 磁盘持久化倒排索引，支持增量更新 |
 
 #### 3.2.6 表结构设计
 
@@ -538,7 +471,7 @@ flowchart TB
 ```sql
 -- 文档元数据
 CREATE TABLE documents (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid,
     title           TEXT NOT NULL,
     doc_type        TEXT NOT NULL DEFAULT 'pdf',                        -- pdf / md / html
     category        TEXT NOT NULL DEFAULT 'employee_handbook',          -- employee_handbook / compliance / technical_spec / architecture
@@ -550,8 +483,8 @@ CREATE TABLE documents (
     tags            JSONB DEFAULT '[]',
     summary         TEXT,
     metadata        JSONB DEFAULT '{}',                                 -- 扩展字段
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW,
+    updated_at      TIMESTAMPTZ DEFAULT NOW
 );
 CREATE UNIQUE INDEX idx_documents_file_hash ON documents(file_hash);
 CREATE INDEX idx_documents_category ON documents(category);
@@ -562,7 +495,7 @@ CREATE INDEX idx_documents_status ON documents(status);
 ```sql
 -- 文件摄取历史
 CREATE TABLE ingestion_history (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid,
     document_id     UUID REFERENCES documents(id) ON DELETE CASCADE,
     source_path     TEXT NOT NULL,
     file_hash       TEXT NOT NULL,
@@ -572,7 +505,7 @@ CREATE TABLE ingestion_history (
     error_message   TEXT,
     started_at      TIMESTAMPTZ,
     completed_at    TIMESTAMPTZ,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW
 );
 CREATE INDEX idx_ingestion_document_id ON ingestion_history(document_id);
 CREATE INDEX idx_ingestion_status ON ingestion_history(status);
@@ -581,7 +514,7 @@ CREATE INDEX idx_ingestion_status ON ingestion_history(status);
 ```sql
 -- 图片索引（预留，当前暂不实现图片提取与索引）
 CREATE TABLE image_index (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid,
     document_id     UUID REFERENCES documents(id) ON DELETE CASCADE,
     chunk_id        TEXT,
     image_path      TEXT NOT NULL,
@@ -589,7 +522,7 @@ CREATE TABLE image_index (
     alt_text        TEXT,
     width           INTEGER,
     height          INTEGER,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW
 );
 CREATE INDEX idx_image_document_id ON image_index(document_id);
 ```
@@ -597,7 +530,7 @@ CREATE INDEX idx_image_document_id ON image_index(document_id);
 ```sql
 -- 评估结果
 CREATE TABLE evaluation_results (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid,
     run_id          TEXT NOT NULL,
     evaluator       TEXT NOT NULL,                                      -- ragas / custom
     category        TEXT,                                               -- 按分类评估
@@ -605,7 +538,7 @@ CREATE TABLE evaluation_results (
     total_queries   INTEGER NOT NULL DEFAULT 0,
     passed_queries  INTEGER NOT NULL DEFAULT 0,
     avg_score       REAL DEFAULT 0,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW
 );
 CREATE INDEX idx_eval_run_id ON evaluation_results(run_id);
 CREATE INDEX idx_eval_category ON evaluation_results(category);
@@ -626,9 +559,9 @@ CREATE TABLE traces (
     cache_hit         BOOLEAN DEFAULT FALSE,                            -- 缓存命中率
     rejected          BOOLEAN DEFAULT FALSE,                            -- 拒绝率
     rejection_reason  TEXT,
-    compliance_score  REAL,                                             -- 答案符合率
+    context_precision  REAL,                                             -- 上下文精确度
     metadata          JSONB DEFAULT '{}',
-    started_at        TIMESTAMPTZ DEFAULT NOW(),
+    started_at        TIMESTAMPTZ DEFAULT NOW,
     completed_at      TIMESTAMPTZ
 );
 CREATE INDEX idx_traces_trace_id ON traces(trace_id);
@@ -645,8 +578,8 @@ CREATE TABLE query_cache (
     rerank          BOOLEAN,
     results         JSONB NOT NULL,
     hit_count       INTEGER DEFAULT 1,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    expires_at      TIMESTAMPTZ DEFAULT NOW() + INTERVAL '1 hour'
+    created_at      TIMESTAMPTZ DEFAULT NOW,
+    expires_at      TIMESTAMPTZ DEFAULT NOW + INTERVAL '1 hour'
 );
 CREATE INDEX idx_query_cache_expires ON query_cache(expires_at);
 ```
@@ -654,12 +587,12 @@ CREATE INDEX idx_query_cache_expires ON query_cache(expires_at);
 ```sql
 -- Embedding 缓存
 CREATE TABLE embedding_cache (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid,
     provider        TEXT NOT NULL,
     model           TEXT NOT NULL,
     content_hash    TEXT NOT NULL,
     embedding       vector(1536),
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    created_at      TIMESTAMPTZ DEFAULT NOW,
     UNIQUE(provider, model, content_hash)
 );
 ```
@@ -667,13 +600,13 @@ CREATE TABLE embedding_cache (
 ```sql
 -- 对话列表
 CREATE TABLE conversations (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid,
     title           TEXT NOT NULL DEFAULT '新对话',
     search_mode     TEXT DEFAULT 'hybrid',                              -- vector_only / hybrid
     rerank_enabled  BOOLEAN DEFAULT TRUE,
     message_count   INTEGER DEFAULT 0,
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW,
+    updated_at      TIMESTAMPTZ DEFAULT NOW
 );
 CREATE INDEX idx_conversations_updated ON conversations(updated_at DESC);
 ```
@@ -688,7 +621,7 @@ CREATE TABLE conversation_messages (
     citations       JSONB DEFAULT '[]',
     tokens          INTEGER DEFAULT 0,
     latency_ms      INTEGER DEFAULT 0,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW
 );
 CREATE INDEX idx_messages_conv_id ON conversation_messages(conversation_id);
 CREATE INDEX idx_messages_created ON conversation_messages(created_at);
@@ -702,7 +635,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- 文档 Chunk（含 Dense 向量 + Metadata）
 CREATE TABLE document_chunks (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid,
     document_id     UUID NOT NULL,
     chunk_index     INTEGER NOT NULL,
     content         TEXT NOT NULL,
@@ -713,7 +646,7 @@ CREATE TABLE document_chunks (
     language        TEXT NOT NULL,
     embedding       vector(1536),                                        -- Dense 语义向量
     metadata        JSONB DEFAULT '{}',
-    created_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW
 );
 CREATE INDEX idx_chunks_document_id ON document_chunks(document_id);
 CREATE INDEX idx_chunks_category ON document_chunks(category);
@@ -725,11 +658,8 @@ CREATE INDEX idx_chunks_embedding_hnsw ON document_chunks
 ```
 
 ```sql
--- pg_bm25 + pg_search 扩展
-CREATE EXTENSION IF NOT EXISTS pg_bm25;
-CREATE EXTENSION IF NOT EXISTS pg_search;
-
--- BM25 全文搜索索引（基于 pg_bm25 扩展的倒排索引）
+-- BM25（应用层实现）
+-- BM25 检索由 SparseEncoder + BM25Indexer（自研 BM25）在应用层实现，索引持久化到 data/db/bm25/
 CREATE INDEX idx_chunks_bm25 ON document_chunks
     USING bm25 (content, section_title, category, language)
     WITH (key_field = 'id');
@@ -763,11 +693,11 @@ CREATE INDEX idx_chunks_bm25 ON document_chunks
 业务代码
   │
   ▼
-<Component>Factory.get_xxx()  ← 读取配置
+<Component>Factory.get_xxx  ← 读取配置
   │
-  ├─→ ImplementationA()
-  ├─→ ImplementationB()
-  └─→ ImplementationC()
+  ├─→ ImplementationA
+  ├─→ ImplementationB
+  └─→ ImplementationC
       │
       ▼
     都实现了统一的抽象接口
@@ -783,8 +713,6 @@ CREATE INDEX idx_chunks_bm25 ON document_chunks
 | OpenAI 原生 | 通用开发、最新模型 | `provider: openai` |
 | DeepSeek | 成本优化 | `provider: deepseek` |
 | Ollama | 完全离线、隐私敏感 | `provider: ollama` |
-
-
 
 **向量存储**：`BaseVectorStore` 接口，默认实现 pgvector。
 
@@ -811,7 +739,7 @@ CREATE INDEX idx_chunks_bm25 ON document_chunks
 | `cache_hit` | 是否命中缓存（Embedding / 结果缓存） |
 | `rejected` | 是否被拒绝（限流 / 内容过滤） |
 | `rejection_reason` | 拒绝原因 |
-| `compliance_score` | 答案符合率 0-1 |
+| `context_precision` | 上下文精确度（Ragas 评估） |
 | `top_k_results` | 最终 Chunk ID 列表 |
 
 **Ingestion Trace** (`trace_type="ingestion"`)：
@@ -830,7 +758,7 @@ CREATE INDEX idx_chunks_bm25 ON document_chunks
 
 #### 3.5.2 结构化日志框架
 
-采用 **structlog** 替代标准 Python logging，统一 JSON 格式输出，包含完整追踪上下文。
+采用 **Python logging + 自定义 LogFormatter**，统一 JSON 格式输出，包含完整追踪上下文。
 
 **固定字段定义**：
 
@@ -871,46 +799,29 @@ CREATE INDEX idx_chunks_bm25 ON document_chunks
 
 #### 3.5.3 技术方案
 
-- **记录**：structlog 的 `bind()` 注入 trace_id / span_id / request_id 上下文
+- **记录**：LogFormatter 自动注入 trace_id / span_id / request_id 上下文
 - **持久化**：Pipeline / Query Engine 执行时通过 TraceContext 记录各阶段数据
 - **读取**：REST API 读取 JSON Lines 文件返回给前端
 
 ```python
-# structlog 配置示例
-import structlog
-
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
-    ],
-    context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
-    cache_logger_on_first_use=True,
-)
+# 日志配置示例（详见 common/log.py）
+from app.common.log import get_logger
+logger = get_logger(__name__)
+logger.info("service_startup", message="Knowledge Service 正在启动")
 ```
 
 #### 3.5.4 Dashboard 页面路由
 
 | 路由 | 页面 | API 数据源 |
 |------|------|-----------|
-| `/overview` | 系统总览 | `GET /api/config`, `/api/stats` |
-| `/admin/documents` | 文档中心 | `GET /api/documents/*`, `POST /api/ingestion/*`, `GET /api/collections` |
+| `/overview` | 系统总览 | `GET /api/system/config`, `GET /api/system/stats` |
+| `/admin/documents` | 文档中心 | `GET /api/documents/*`, `POST /api/ingestion/upload`, `GET /api/data/categories` |
 | `/admin/documents/:id` | 文档详情 | `GET /api/documents/{id}/chunks`, `PUT /api/documents/{id}` |
-| `/assistant` | AI 知识助手 | `POST /api/assistant/query`, `GET /api/assistant/history` |
-| `/assistant/:id` | 对话详情 | `GET /api/assistant/history/{id}` |
-| `/documents` | 数据浏览 | `GET /api/documents/*`, `/api/collections` |
+| `/query` | AI 知识检索 | `POST /api/query/search`, `GET /api/query/traces`, `GET /api/query/traces/metrics` |
+| `/documents` | 数据浏览 | `GET /api/data/documents`, `GET /api/data/categories`, `GET /api/data/languages` |
 | `/documents/:id` | 文档详情 | `GET /api/documents/{id}/chunks` |
 | `/ingestion` | Ingestion 管理 | `POST /api/ingestion/*`, `DELETE /api/documents/{id}` |
-| `/ingestion/traces` | Ingestion 追踪 | `GET /api/ingestion/traces` |
-| `/ingestion/traces/:id` | 追踪详情 | `GET /api/ingestion/traces/{trace_id}` |
-| `/query` | Query 追踪 | `GET /api/query/traces` + `GET /api/query/metrics` |
-| `/query/traces/:id` | 查询详情 | `GET /api/query/traces/{trace_id}` |
 | `/evaluation` | 评估面板 | `POST /api/evaluation/run`, `GET /api/evaluation/*` |
-
 
 ### 3.7 性能设计
 
@@ -931,7 +842,7 @@ structlog.configure(
 Query 链路（含 LLM 回答）延迟拆解（目标 < 10s）：
   Query Processing    ~50ms      关键词提取 / 扩展
   Dense Retrieval     ~200ms     pgvector <=> 查询（HNSW 索引，top-50）
-  Sparse Retrieval    ~200ms     pg_bm25 BM25 查询
+  Sparse Retrieval    ~200ms     BM25Indexer 查询
   RRF Fusion          ~10ms      内存排序
   Rerank              ~2s        Cross-Encoder 对 20 候选评分（可选）
   LLM Answer          ~5s        gpt-4o-mini 总结回答
@@ -952,8 +863,8 @@ CREATE TABLE query_cache (
     rerank      BOOLEAN,
     results     JSONB NOT NULL,                            -- 缓存的 Top-K chunks
     hit_count   INTEGER DEFAULT 1,
-    created_at  TIMESTAMPTZ DEFAULT NOW(),
-    expires_at  TIMESTAMPTZ DEFAULT NOW() + INTERVAL '1 hour'
+    created_at  TIMESTAMPTZ DEFAULT NOW,
+    expires_at  TIMESTAMPTZ DEFAULT NOW + INTERVAL '1 hour'
 );
 ```
 
@@ -972,8 +883,8 @@ CREATE TABLE query_cache (
 | **Web 服务** | FastAPI 异步 + uvicorn worker | 单进程 async 即可承载 ≥ 5 并发，无需多 worker |
 | **数据库连接池** | `max_connections = 20` | PostgreSQL 连接池（`psycopg2` async 或 `asyncpg`） |
 | **pgvector 索引** | HNSW（`hnsw`）替代 IVFFlat | HNSW 查询更快（~5ms vs ~50ms），适合高并发只读场景 |
-| **LLM 调用** | `asyncio.to_thread()` + 超时控制 | LLM SDK 为同步调用时抛到线程池执行，设 timeout=15s |
-| **Ingestion Pipeline** | 后台异步任务 | 文件上传 / PDF 解析 / 分块 / Embedding 均为后台执行，不占用实时检索的线程资源，前端通过轮询或 WebSocket 获取进度 |
+| **LLM 调用** | `asyncio.to_thread` + 超时控制 | LLM SDK 为同步调用时抛到线程池执行，设 timeout=15s |
+| **Ingestion Pipeline** | 后台异步任务 | 文件上传 / PDF 解析 / 分块 / Embedding 均为后台执行，不占用实时检索的线程资源，前端通过轮询获取进度 |
 
 #### 3.7.5 pgvector 索引建议
 
@@ -1098,7 +1009,7 @@ graph TB
     subgraph BE["FastAPI Backend (localhost:8000)"]
         API["/api/* REST API"]
         MCP_SSE["/mcp/sse MCP SSE"]
-        WS_CH["/api/ws/* WebSocket"]
+        
         DM["DocumentManager"]
         QE["QueryEngine"]
         ER["EvalRunner"]
@@ -1106,17 +1017,17 @@ graph TB
         ING["Ingestion Pipeline"]
         QRY["Query Engine"]
         LIBS["Libs (LLM / Embedding / Splitter / VectorStore / Reranker)"]
-        OBS["Observability (structlog / TraceContext)"]
+        OBS["Observability (logging / TraceContext)"]
     end
 
     subgraph Storage["Storage Layer"]
         PG["PostgreSQL (knowledge) -- 业务数据/索引/日志"]
         PGV["pgvector (knowledge_rag) -- 密集向量/Chunk元数据"]
-        BM25["pg_bm25 (PostgreSQL) -- 全文检索 + BM25 索引"]
+        BM25["BM25Indexer (自研 BM25) -- 倒排索引 (data/db/bm25/*.json)"]
     end
 
     REACT --> API
-    REACT --> WS_CH
+    
     MCPC --> MCP_SSE
     API --> DM
     API --> QE
@@ -1139,149 +1050,174 @@ graph TB
 knowledge-service/
 │
 ├── backend/                                # FastAPI 后端
+│   ├── alembic/                            # 数据库迁移（Alembic）
+│   │   ├── env.py
+│   │   └── versions/
+│   │       └── a46f26680081_baseline.py
 │   ├── app/                                # FastAPI 应用代码
 │   │   ├── __init__.py
-│   │   ├── main.py                         # FastAPI 应用入口
+│   │   ├── main.py                         # FastAPI 应用入口（lifespan + CORS + MCP SSE）
 │   │   │
-│   │   ├── api/                            # REST API & WebSocket
+│   │   ├── api/                            # REST API
 │   │   │   ├── __init__.py
 │   │   │   ├── router.py                   # 主路由聚合
-│   │   │   ├── dependencies.py             # 公共依赖注入
-│   │   │   ├── config.py                   # /api/health, /api/config, /api/stats
-│   │   │   ├── documents.py                # /api/collections, /api/documents/*
-│   │   │   ├── ingestion.py                # /api/ingestion/*
-│   │   │   ├── assistant.py                # /api/assistant/*（智能问答 + 对话管理）
-│   │   │   ├── query.py                    # /api/query, /api/query/traces
-│   │   │   ├── traces.py                   # /api/ingestion/traces/*
-│   │   │   ├── evaluation.py               # /api/evaluation/*
-│   │   │   └── images.py                   # /api/images/*
+│   │   │   ├── system.py                   # /api/system/config, /api/system/stats
+│   │   │   ├── data.py                     # /api/data/documents, chunks, categories, languages
+│   │   │   ├── documents.py                # /api/documents/*（CRUD + batch + stats）
+│   │   │   ├── ingestion.py                # /api/ingestion/*（upload + history + traces）
+│   │   │   ├── query.py                    # /api/query/search + traces + metrics
+│   │   │   ├── evaluation.py               # /api/evaluation/*（testsets + run + results）
+│   │   │   ├── images.py                   # /api/images/*
+│   │   │   └── websocket.py                # /api/ws/*（WebSocket, 本期不实现）
 │   │   │
-│   │   ├── mcp/                            # MCP SSE Transport
-│   │   │   ├── __init__.py
-│   │   │   └── sse_server.py               # SSE 会话管理 + 工具注册
-│   │   │
-│   │   ├── core/                           # Core 层
+│   │   ├── common/                         # 通用基础设施
 │   │   │   ├── __init__.py
 │   │   │   ├── settings.py                 # 配置加载与校验
 │   │   │   ├── types.py                    # 核心数据类型契约
-│   │   │   ├── query_engine/               # 查询引擎
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── query_processor.py
-│   │   │   │   ├── hybrid_search.py
-│   │   │   │   ├── dense_retriever.py
-│   │   │   │   ├── sparse_retriever.py
-│   │   │   │   ├── fusion.py
-│   │   │   │   └── reranker.py
-│   │   │   ├── response/                   # 响应构建
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── response_builder.py
-│   │   │   │   └── citation_generator.py
-│   │   │   └── trace/                      # 追踪模块
-│   │   │       ├── __init__.py
-│   │   │       ├── trace_context.py
-│   │   │       └── trace_collector.py
+│   │   │   ├── enums.py                    # 枚举定义
+│   │   │   ├── cache.py                    # 查询缓存
+│   │   │   ├── database.py                 # 数据库连接池（raw asyncpg）
+│   │   │   ├── database_sa.py              # SQLAlchemy 异步引擎
+│   │   │   ├── log.py                      # 日志工具
+│   │   │   ├── telemetry.py                # OpenTelemetry 配置
+│   │   │   └── pipeline_callback.py        # Pipeline 进度回调
 │   │   │
-│   │   ├── ingestion/                      # Ingestion 层
+│   │   ├── core/                           # Core 层（预留扩展）
+│   │   │   ├── __init__.py
+│   │   │   └── response/
+│   │   │       └── __init__.py
+│   │   │
+│   │   ├── factory/                        # 可插拔工厂层
+│   │   │   ├── __init__.py
+│   │   │   ├── factory.py                  # 统一工厂入口
+│   │   │   ├── base/                       # 抽象基类
+│   │   │   │   ├── base_llm.py
+│   │   │   │   ├── base_embedding.py
+│   │   │   │   ├── base_splitter.py
+│   │   │   │   ├── base_vector_store.py
+│   │   │   │   ├── base_reranker.py
+│   │   │   │   ├── base_loader.py
+│   │   │   │   └── base_evaluator.py
+│   │   │   ├── llm/                        # LLM 实现
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── openai.py
+│   │   │   │   ├── ollama.py
+│   │   │   │   └── deepseek.py
+│   │   │   ├── embedding/                  # Embedding 实现
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── openai.py
+│   │   │   │   └── ollama.py
+│   │   │   ├── splitter/                   # 分块策略实现
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── langchain_impl.py
+│   │   │   ├── vector_store/               # 向量存储实现
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── pgvector_impl.py
+│   │   │   ├── reranker/                   # 重排序实现
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── cross_encoder.py
+│   │   │   ├── loader/                     # 文档加载器
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── pdf.py
+│   │   │   │   ├── html.py
+│   │   │   │   └── markdown.py
+│   │   │   └── evaluator/                  # 评估器实现
+│   │   │       ├── __init__.py
+│   │   │       ├── basic.py
+│   │   │       ├── ragas_evaluator.py
+│   │   │       ├── composite.py
+│   │   │       └── runner.py
+│   │   │
+│   │   ├── ingestion/                      # 数据摄取层
 │   │   │   ├── __init__.py
 │   │   │   ├── pipeline.py                 # Pipeline 主流程
-│   │   │   ├── document_manager.py         # 文档生命周期管理
+│   │   │   ├── models.py                   # Ingestion 领域模型
+│   │   │   ├── ingest.py                   # CLI 脚本入口
+│   │   │   ├── integrity.py                # SHA256 文件完整性
 │   │   │   ├── chunking/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── document_chunker.py     # 按文件类型路由分块策略
-│   │   │   │   └── chunk_strategy.py       # 分块策略定义（MD/HTML/默认）
-│   │   │   ├── transform/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── base_transform.py
-│   │   │   │   ├── chunk_refiner.py
-│   │   │   │   └── metadata_enricher.py
+│   │   │   │   └── batch_processor.py      # 分块批处理器
 │   │   │   ├── embedding/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── dense_encoder.py
-│   │   │   │   ├── sparse_encoder.py
-│   │   │   │   └── batch_processor.py
+│   │   │   │   └── dense_encoder.py        # Dense 向量编码
+│   │   │   └── transform/
+│   │   │       ├── __init__.py
+│   │   │       ├── base.py
+│   │   │       ├── chunk_refiner.py
+│   │   │       └── metadata_enricher.py
 │   │   │   └── storage/
 │   │   │       ├── __init__.py
 │   │   │       ├── vector_upserter.py      # pgvector Upsert
-│   │   │       ├── bm25_indexer.py
-│   │   │       └── image_storage.py
+│   │   │       └── bm25_indexer.py         # BM25 索引（SparseEncoder + 磁盘持久化）
 │   │   │
-│   │   ├── libs/                           # 可插拔抽象层
+│   │   ├── query_engine/                   # 查询引擎
 │   │   │   ├── __init__.py
-│   │   │   ├── loader/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── base_loader.py
-│   │   │   │   ├── pdf_loader.py
-│   │   │   │   └── file_integrity.py
-│   │   │   ├── llm/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── base_llm.py
-│   │   │   │   ├── llm_factory.py
-│   │   │   │   ├── azure_llm.py
-│   │   │   │   ├── openai_llm.py
-│   │   │   │   ├── ollama_llm.py
-│   │   │   │   └── deepseek_llm.py
-│   │   │   ├── embedding/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── base_embedding.py
-│   │   │   │   ├── embedding_factory.py
-│   │   │   │   ├── openai_embedding.py
-│   │   │   │   ├── azure_embedding.py
-│   │   │   │   └── ollama_embedding.py
-│   │   │   ├── splitter/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── base_splitter.py
-│   │   │   │   ├── splitter_factory.py
-│   │   │   │   ├── markdown_header_splitter.py
-│   │   │   │   ├── html_header_splitter.py
-│   │   │   │   └── recursive_splitter.py
-│   │   │   ├── vector_store/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── base_vector_store.py
-│   │   │   │   ├── vector_store_factory.py
-│   │   │   │   └── pgvector_store.py
-│   │   │   ├── reranker/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── base_reranker.py
-│   │   │   │   ├── reranker_factory.py
-│   │   │   │   ├── cross_encoder_reranker.py
-│   │   │   │   └── llm_reranker.py
-│   │   │   └── evaluator/
-│   │   │       ├── __init__.py
-│   │   │       ├── base_evaluator.py
-│   │   │       ├── evaluator_factory.py
-│   │   │       ├── ragas_evaluator.py
-│   │   │       └── custom_evaluator.py
+│   │   │   ├── pipeline.py                 # 查询管线编排
+│   │   │   ├── query_processor.py          # 查询预处理
+│   │   │   ├── query_types.py              # 查询类型定义
+│   │   │   ├── dense_retriever.py          # 向量检索
+│   │   │   ├── sparse_retriever.py         # BM25 检索
+│   │   │   ├── hybrid_search.py            # 混合检索编排
+│   │   │   ├── rrf_fusion.py               # RRF 融合
+│   │   │   └── reranker.py                 # 重排序逻辑
 │   │   │
-│   │   └── observability/                  # 可观测性
-│   │       ├── __init__.py
-│   │       ├── logger.py                   # structlog 配置
-│   │       └── evaluation/
-│   │           ├── __init__.py
-│   │           ├── eval_runner.py
-│   │           └── composite_evaluator.py
+│   │   ├── mcp_server/                     # MCP SSE Transport
+│   │   │   ├── __init__.py
+│   │   │   └── server.py                   # FastMCP + SSE 会话管理
+│   │   │
+│   │   ├── model/                          # 数据模型层
+│   │   │   ├── __init__.py
+│   │   │   ├── dto/                        # Pydantic 数据传输对象
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── document.py
+│   │   │   │   ├── ingestion.py
+│   │   │   │   ├── query.py
+│   │   │   │   └── evaluation.py
+│   │   │   └── entity/                     # SQLAlchemy ORM 实体
+│   │   │       ├── __init__.py
+│   │   │       ├── base.py                 # ORM Base + 多库支持
+│   │   │       ├── document.py
+│   │   │       ├── chunk.py
+│   │   │       ├── image.py
+│   │   │       ├── ingestion.py
+│   │   │       ├── query.py
+│   │   │       └── evaluation.py
+│   │   │
+│   │   ├── repositories/                   # Repository 层
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py                     # 通用 CRUD 基类
+│   │   │   ├── document_repo.py
+│   │   │   ├── chunk_repo.py
+│   │   │   ├── ingestion_repo.py
+│   │   │   └── query_repo.py
+│   │   │
+│   │   └── logs/                           # 运行时日志
+│   │       └── service.jsonl
 │   │
 │   ├── config/
-│   │   ├── settings.yaml                   # 系统配置
+│   │   ├── settings.yaml                   # 系统配置（含 LLM/Embedding 凭证）
 │   │   └── logrotate.conf                  # 日志轮转配置
-│   ├── logs/
-│   │   └── service.jsonl
 │   ├── scripts/
-│   │   ├── __init__.py
-│   │   ├── init_knowledge_db.sql
-│   │   └── init_knowledge_rag_db.sql
+│   │   ├── init_knowledge_db.sql           # knowledge 库 DDL
+│   │   ├── init_knowledge_rag_db.sql       # knowledge_rag 库 DDL
+│   │   └── eval_oneclick.py                # 一键评估脚本
 │   ├── tests/
 │   │   ├── __init__.py
+│   │   ├── conftest.py                     # pytest fixtures
 │   │   ├── unit/
+│   │   │   ├── test_health.py
+│   │   │   ├── test_settings.py
+│   │   │   ├── test_llm.py
+│   │   │   ├── test_loader_pdf.py
+│   │   │   ├── test_documents.py
+│   │   │   └── test_evaluator.py
 │   │   ├── integration/
 │   │   ├── e2e/
 │   │   └── fixtures/
-│   │       ├── sample_documents/
-│   │       │   ├── employee_handbook_zh.md
-│   │       │   ├── compliance_guide_en.md
-│   │       │   ├── technical_spec.html
-│   │       │   └── architecture_overview.pdf
-│   │       └── golden_test_set.json
+│   │       └── sample_documents/
 │   ├── pyproject.toml
+│   └── .gitignore
+│
 ├── frontend/                               # React 前端
 │   ├── index.html
 │   ├── package.json
@@ -1290,12 +1226,11 @@ knowledge-service/
 │   ├── tsconfig.app.json
 │   ├── tsconfig.node.json
 │   ├── eslint.config.js
-│   ├── .gitignore
 │   └── src/
 │       ├── main.tsx
-│       ├── App.tsx
+│       ├── App.tsx                          # 路由定义（6 条路由）
 │       ├── index.css
-│       ├── api/
+│       ├── api/                             # Axios API 客户端
 │       │   ├── client.ts
 │       │   ├── config.ts
 │       │   ├── documents.ts
@@ -1306,30 +1241,30 @@ knowledge-service/
 │       ├── types/
 │       │   └── index.ts
 │       ├── hooks/
-│       │   └── useWebSocket.ts
-│       ├── pages/
+│       ├── pages/                           # 6 个功能页面
 │       │   ├── Overview.tsx
 │       │   ├── DocumentCenter.tsx
 │       │   ├── AIAssistant.tsx
 │       │   ├── DataBrowser.tsx
 │       │   ├── IngestionManager.tsx
-│       │   ├── IngestionTraces.tsx
-│       │   ├── QueryTraces.tsx
+│       │   ├── QueryTraces.tsx              # 嵌入 AIAssistant 的查询追踪面板
 │       │   └── EvaluationPanel.tsx
-│       └── components/
-│           ├── AppLayout.tsx
-│           ├── HistoryChart.tsx
-│           ├── MetricsCard.tsx
-│           ├── ConfigCard.tsx
-│           ├── ChatMessage.tsx
-│           ├── CitationCard.tsx
-│           ├── WaterfallChart.tsx
-│           ├── DenseSparseCompare.tsx
-│           ├── RerankComparison.tsx
-│           ├── MetricsPanel.tsx
-│           └── ProgressOverlay.tsx
+│       ├── components/                      # 通用组件
+│       │   ├── AppLayout.tsx
+│       │   ├── HistoryChart.tsx
+│       │   ├── MetricsCard.tsx
+│       │   ├── ConfigCard.tsx
+│       │   ├── ChatMessage.tsx
+│       │   ├── CitationCard.tsx
+│       │   ├── WaterfallChart.tsx
+│       │   ├── DenseSparseCompare.tsx
+│       │   ├── RerankComparison.tsx
+│       │   ├── MetricsPanel.tsx
+│       │   └── ProgressOverlay.tsx
+│       └── assets/
 │
 ├── DEV_SPEC.md
+├── DEV_SPEC.bak.md
 └── README.md
 ```
 ### 5.3 模块说明
@@ -1342,7 +1277,7 @@ knowledge-service/
 | `api/router.py` | REST 路由聚合 | APIRouter 分组，tags |
 | `api/dependencies.py` | 公共依赖注入 | get_settings / get_document_manager / get_query_engine / get_db_pool |
 | `api/config.py` | 系统概览 | 从 Settings 读取配置、DocumentManager 读取统计 |
-| `api/documents.py` | 数据浏览 | 封装 pgvector / pg_bm25 / ImageStorage 读取 |
+| `api/documents.py` | 数据浏览 | 封装 pgvector / BM25Indexer / ImageStorage 读取 |
 | `api/ingestion.py` | 摄取管理 | 文件上传（自动识别类型）、Pipeline 触发、进度查询、文档删除 |
 | `api/query.py` | 查询 + 追踪 | HybridSearch 调用、Trace 文件读取 |
 | `api/evaluation.py` | 评估 | EvalRunner 触发、指标读取、历史趋势 |
@@ -1364,23 +1299,23 @@ knowledge-service/
 | `response_builder.py` | 响应构建 | MCP 响应格式化 |
 | `citation_generator.py` | 引用生成 | 结构化引用列表 |
 | `trace_context.py` | 追踪上下文 | trace_id 生成、阶段记录、finish 汇总 |
-| `trace_collector.py` | 追踪收集器 | 收集 trace 并触发 structlog 写出 |
+| `trace_collector.py` | 追踪收集器 | 收集 trace 并触发日志写出 |
 
 #### 5.3.3 Ingestion 层
 
 | 模块 | 职责 | 关键技术点 |
 |------|------|----------|
 | `pipeline.py` | Pipeline 编排 | 串行执行、异常处理、增量更新、on_progress 回调 |
-| `document_manager.py` | 文档生命周期 | list/delete/stats，跨存储协调（pgvector + pg_bm25 + Image + PostgreSQL） |
+| `document_manager.py` | 文档生命周期 | list/delete/stats，跨存储协调（pgvector + BM25Indexer + Image + PostgreSQL） |
 | `document_chunker.py` | 分块策略路由 | 按文件类型选择 MD / HTML / 默认分块器 |
 | `chunk_strategy.py` | 分块策略定义 | MarkdownHeaderTextSplitter / HTMLHeaderTextSplitter / RecursiveCharacterTextSplitter |
 | `base_transform.py` | Transform 抽象 | 原子化、幂等、可独立重试 |
 | `chunk_refiner.py` | Chunk 智能重组 | 规则去噪 + 可选 LLM |
 | `metadata_enricher.py` | 元数据增强 | Title/Summary/Tags + category/language |
 | `dense_encoder.py` | 稠密编码 | 通过 libs.embedding，批处理 |
-| `sparse_encoder.py` | 稀疏编码 | BM25 |
+| `sparse_encoder.py` | 稀疏编码 | 输出 term_frequencies + doc_length 供 BM25Indexer 构建倒排索引 |
 | `vector_upserter.py` | pgvector Upsert | 幂等，vector 数据类型写入 |
-| `bm25_indexer.py` | BM25 索引 | 倒排索引 + IDF |
+| `bm25_indexer.py` | BM25 索引 | 倒排索引 + IDF + 磁盘持久化 `data/db/bm25/*.json` + 增量更新 + 原子写 |
 | `image_storage.py` | 图片存储 | 本地文件 + PostgreSQL 索引 |
 
 #### 5.3.4 Libs 层（可插拔抽象）
@@ -1403,11 +1338,10 @@ knowledge-service/
 | `api/config.ts` | 系统配置 API | 读取 LLM/Embedding/Reranker 等组件配置 |
 | `pages/Overview.tsx` | 系统总览 | ConfigCard x6、StatsTable |
 | `pages/DocumentCenter.tsx` | 文档中心 | DocLibraryTable（筛选/批量/状态）、UploadArea、CollectionManager |
-| `pages/AIAssistant.tsx` | AI 知识助手 | ChatPanel（对话消息）、ConvSidebar（对话列表）、SettingsBar（检索模式切换 + 重排序开关） |
+| `pages/AIAssistant.tsx` | AI 知识检索 | ChatPanel（对话消息）、ConvSidebar（对话列表）、QueryTraces 查询追踪、SettingsBar（检索模式切换 + 重排序开关） |
 | `pages/DataBrowser.tsx` | 数据浏览 | DocumentTable（支持 category/language 筛选）、ChunkDetailPanel |
 | `pages/IngestionManager.tsx` | 摄取管理 | Dragger、ProgressOverlay、DocumentList |
-| `pages/IngestionTraces.tsx` | 摄取追踪 | WaterfallChart、StageAccordion |
-| `pages/QueryTraces.tsx` | Query 追踪 | MetricsPanel（p50/p95/令牌/缓存/拒绝/符合率）、DenseSparseCompare、RerankComparison |
+| `pages/QueryTraces.tsx` | 查询追踪（嵌入 AI 知识检索） | MetricsPanel（p50/p95/令牌/缓存/拒绝/符合率）、DenseSparseCompare、RerankComparison |
 | `pages/EvaluationPanel.tsx` | 评估面板 | MetricCard、HistoryChart |
 | `components/AppLayout.tsx` | 主布局 | Ant Design Layout (Sider + Content + Menu)，8 导航项 |
 | `components/HistoryChart.tsx` | 历史趋势图 | Recharts 封装，支持多指标叠加 |
@@ -1443,11 +1377,10 @@ sequenceDiagram
         Pipeline->>Pipeline: Load → 类型识别 → 按文件类型路由分块策略
         Pipeline->>Pipeline: Transform (Refine + Enrich + Caption)
         Pipeline->>Store: Dense Encoder
-        Pipeline->>Store: Upsert (pgvector + BM25 + Image + PostgreSQL)
+        Pipeline->>Store: Upsert (pgvector + Image + PostgreSQL)
         Store-->>Pipeline: 写入完成
         loop on_progress 回调
-            Pipeline-->>API: WebSocket 推送阶段进度
-            API-->>User: WS 实时推送 stage_update
+            Pipeline-->>API: 回调更新 stage
         end
         Pipeline-->>API: { run_id, status: "success", total_chunks, total_images }
     end
@@ -1490,12 +1423,12 @@ sequenceDiagram
     participant DM as DocumentManager
     participant Store as 存储层
 
-    React->>API: GET /api/config
+    React->>API: GET /api/system/config
     API->>API: 读取 Settings
     API-->>React: 组件配置
 
-    React->>API: GET /api/stats
-    API->>DM: get_collection_stats()
+    React->>API: GET /api/system/stats
+    API->>DM: get_collection_stats
     DM->>Store: PostgreSQL / pgvector 统计
     Store-->>DM: 各存储统计（含 category 分布）
     DM-->>API: 聚合数据
@@ -1542,13 +1475,8 @@ vector_store:
 
 # ===== 稀疏检索配置 =====
 sparse_search:
-  backend: pg_bm25              # pg_bm25 | elasticsearch
-  host: localhost
-  port: 5432
-  user: postgres
-  password: root123456
-  database: knowledge_rag
-
+  backend: bm25_indexer           # bm25_indexer | elasticsearch
+  index_dir: data/db/bm25         # BM25 倒排索引持久化目录（JSON 文件）
 
 # ===== LLM 配置 =====
 llm:
@@ -1579,7 +1507,7 @@ splitter:
 
 # ===== 检索配置 =====
 retrieval:
-  sparse_backend: pg_bm25        # pg_bm25 | elasticsearch
+  sparse_backend: bm25_indexer     # bm25_indexer | elasticsearch
   fusion_algorithm: rrf          # rrf | weighted_sum
   rerank_backend: cross_encoder  # none | cross_encoder | llm
 
@@ -1607,58 +1535,80 @@ server:
 2. 确保新后端的依赖已安装、凭据已配置
 3. 重启服务，工厂函数自动加载新实现
 
-### 5.6 数据持久化层设计（Repository 模式 + 迁移路线图）
+### 5.6 数据持久化层设计（SQLAlchemy 2.0 ORM + Repository + Pydantic Schema）
+
+采用 SQLAlchemy 2.0 async + Pydantic v2 构建完整的数据持久化层，三层架构明确分离：
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  API / Pipeline  │────▶│  Repository   │────▶│  ORM Entity   │────▶ PostgreSQL
+│  (业务逻辑)      │     │  (数据访问)   │     │  (模型映射)   │
+└──────────────┘     └──────────────┘     └──────────────┘
+       │                    │
+       ▼                    ▼
+  Pydantic DTO          SQLAlchemy
+  (API 序列化)          (ORM 映射)
+```
 
 #### 5.6.1 Repository 接口设计
 
-每个实体对应一个 Repository 类，所有 Repository 遵循统一模式：
+每个实体对应一个 Repository 类，继承 `BaseRepository[T]` 通用 CRUD 基类：
 
 | Repository | 对应表 | 核心方法 |
 |-----------|-------|---------|
-| `DocumentRepository` | `documents` | find_by_id / find_by_hash / save / delete / find_all / count |
-| `ChunkRepository` | `document_chunks` | find_by_id / find_by_document / save_batch / delete_by_document |
-| `IngestionHistoryRepository` | `ingestion_history` | find_by_id / find_by_hash / save / update_status / paginate |
-| `TraceRepository` | `ingestion_traces` | find_by_id / save / paginate |
-| `ConversationRepository` | `conversations` | find_by_id / find_by_session / save / delete / paginate |
+| `DocumentRepository` | `documents` | find_by_id / find_by_hash / save / delete / find_all / count / paginate |
+| `ChunkRepository` | `document_chunks` | find_by_id / find_by_document / save_batch / delete_by_document / delete_by_ids |
+| `IngestionTraceRepository` | `ingestion_traces` | find_by_id / save / paginate / count |
+| `QueryTraceRepository` | `query_traces` | find_by_trace_id / save / paginate / count / get_metrics_24h |
 
 #### 5.6.2 分层结构
 
 ```
 app/
-  repositories/           # Repository 层
-    __init__.py
-    base.py               # 抽象基类（可选的通用 CRUD）
+  model/
+    dto/                    # Pydantic Schema（API 响应序列化）
+      document.py
+      ingestion.py
+      query.py
+      evaluation.py
+    entity/                 # SQLAlchemy ORM 模型
+      base.py               # 多库支持的 Base + 通用 mixin
+      document.py
+      chunk.py
+      image.py
+      ingestion.py
+      query.py
+      evaluation.py
+  repositories/             # Repository 层
+    base.py                 # BaseRepository[T] 通用 CRUD
     document_repo.py
     chunk_repo.py
-    ingestion_history_repo.py
-    trace_repo.py
-    conversation_repo.py
-  models/                 # ORM 模型（第二阶段引入）
-    __init__.py
-    document.py
-    chunk.py
-    ...
-  schemas/                # Pydantic DTO（第二阶段引入）
-    __init__.py
-    document.py
-    chunk.py
-    ...
+    ingestion_repo.py
+    query_repo.py
 ```
 
-#### 5.6.3 迁移策略
+#### 5.6.3 技术实现
 
-| 步骤 | 内容 | 依赖 |
-|------|------|------|
-| **Phase 1** | 抽取 Repository 类封装原始 asyncpg SQL | 零新依赖 |
-| **Phase 1.1** | API 层 + Pipeline 层改用 Repository 接口 | Phase 1 |
-| **Phase 2** | 引入 SQLAlchemy 2.0 async，定义 ORM Model | sqlalchemy |
-| **Phase 2.1** | 逐个 Repository 从 asyncpg 迁移到 SQLAlchemy 2.0 | Phase 2 |
-| **Phase 3** | 引入 Alembic 管理数据库版本迁移 | alembic |
-| **Phase 3.1** | 首次基线迁移（基于当前 schema 生成） | Phase 3 |
-| **Phase 4** | 引入 Pydantic Schema，API 层改用 Schema 序列化 | pydantic v2 |
+| 层 | 技术 | 说明 |
+|----|------|------|
+| ORM | SQLAlchemy 2.0 async | 声明式映射（`Mapped` / `mapped_column`），支持 `postgresql+asyncpg://` |
+| 多库支持 | 两个 `async_engine` + 两个 `Base` | `KnowledgeBase` 对应 `knowledge` 库，`KnowledgeRagBase` 对应 `knowledge_rag` 库 |
+| Repository | `BaseRepository[T]` 泛型基类 | 基于 `AsyncSession` 提供 `save / find_all / paginate / count / delete` 通用方法 |
+| DTO | Pydantic v2 BaseModel | `from_attributes=True`，API 响应通过 `response_model` 自动校验与序列化 |
+| 迁移 | Alembic | 首版基线迁移已生成（`alembic/versions/a46f26680081_baseline.py`），替代手动 SQL |
+| 配置 | `settings.yaml` | `database.dsn` 和 `vector_store.dsn` 控制两个数据库的连接参数 |
 
-> **不引入分布式事务**：删除文档功能通过两个 Repository 调用同一个 `delete_document()` 方法确保一致性，跨表操作使用同一个连接上下文。
+#### 5.6.4 当前状态
 
+- ✅ SQLAlchemy 2.0 async 已引入，ORM 模型已定义（`model/entity/` 下 7 个实体）
+- ✅ Pydantic DTO 已定义（`model/dto/` 下 5 个 Schema 文件）
+- ✅ Repository 层已实现（`repositories/` 下 4 个 Repository）
+- ✅ API 层已切换为 DTO 序列化（主要端点已添加 `response_model`）
+- ✅ Alembic 基线迁移已生成
+- 🚧 迁移策略：Repository 内部已从 `asyncpg` 原始 SQL 切换到 `SQLAlchemy 2.0 async`
+- 🚧 Alembic 增量迁移待完善（后续基于 schema 变更自动生成）
+
+> **事务一致性**：删除文档功能通过 Repository 之间的同一个 `AsyncSession` 调用确保一致性，跨表操作使用同一个连接上下文，不引入分布式事务。
 ---
 
 ## 6. 项目排期
@@ -1683,9 +1633,9 @@ app/
 5. **阶段 E：后端服务层（FastAPI + REST API + MCP SSE）**
    - 目的：搭建 FastAPI 后端，实现 REST API 供前端调用，同时通过 SSE Transport 暴露 MCP 工具，让 Copilot/Claude 可直接查询知识库。
 6. **阶段 F：Trace 基础设施与打点**
-   - 目的：实现 structlog 结构化日志（JSON 格式 + 固定字段 + logrotate），在 Ingestion + Query 双链路打点，添加 Pipeline 进度回调。
+   - 目的：实现结构化日志（JSON 格式 + 固定字段 + logrotate）（JSON 格式 + 固定字段 + logrotate），在 Ingestion + Query 双链路打点，添加 Pipeline 进度回调。
 7. **阶段 G：前端 Dashboard（React 可视化管理平台）**
-   - 目的：搭建 React 8 页面管理平台（系统总览 / 数据浏览 / 文档中心 / AI 知识助手 / Ingestion 管理 / Ingestion 追踪 / Query 追踪 / 评估面板），实现完整的可视化管理体验。
+   - 目的：搭建 React 6 页面管理平台（系统总览 / 数据浏览 / 文档中心 / AI 知识检索 / Ingestion 管理 / 评估面板），实现完整的可视化管理体验。
 8. **阶段 H：评估体系**
    - 目的：实现 RagasEvaluator + CompositeEvaluator + EvalRunner，启用评估面板页面，建立 golden test set 回归基线。
 9. **阶段 I：端到端验收与文档收口**
@@ -1708,12 +1658,12 @@ app/
 | A1 | 初始化目录树与最小可运行入口 | ✅ | 2026-06-14 | 启动方式：后端 `cd backend && uv run uvicorn app.main:app --reload --port 8000`；前端 `cd frontend && pnpm dev` |
 | A2 | 引入 pytest 并建立测试目录约定 | ✅ | 2026-06-14 | conftest.py (client + sample_settings fixture), test_health.py (2 tests), pytest markers (unit/integration/e2e/llm) | |
 | A3 | 配置加载与校验（Settings + 数据库连接配置） | ✅ | 2026-06-14 | settings.py (pydantic validators/env_nested_delimiter), test_settings.py (30 tests) | |
-| A4 | PostgreSQL + pgvector + tsvector/GIN 数据库初始化 | ✅ | 2026-06-14 | init_knowledge_db.sql + init_knowledge_rag_db.sql；BM25 评分在应用层实现（T11 pg_bm25 迁移待后续） |
+| A4 | PostgreSQL + pgvector + tsvector/GIN 数据库初始化 | ✅ | 2026-06-14 | init_knowledge_db.sql + init_knowledge_rag_db.sql；BM25 评分在应用层实现（SparseEncoder + 自研 BM25Indexer，详见 C9/C11） |
 | A5 | 前端项目初始化（Vite + React 19 + TypeScript + Ant Design 5 + React Router） | ✅ | 2026-06-14 | 前端骨架，设计规范遵循 UI-UX-Pro-Max skill 指导原则 |
 | A6 | API Client 层构建（Axios + TypeScript 类型定义 + 错误拦截器） | ✅ | 2026-06-14 |
-| A7 | 前端 Layout + Router 框架（Ant Design Layout + 8 路由配置） | ✅ | 2026-06-14 |
+| A7 | 前端 Layout + Router 框架（Ant Design Layout + 6 路由配置） | ✅ | 2026-06-14 |
 | A8 | 全局状态管理 + 主题配置 | ✅ | 2026-06-14 | 主题 via ConfigProvider，全局状态使用 React useState/useEffect 各页独立管理 |
-| A9 | 通用组件库搭建（recharts 图表等第三方依赖引入） | ✅ | 2026-06-14 | HistoryChart, MetricsCard, useWebSocket hook |
+| A9 | 通用组件库搭建（recharts 图表等第三方依赖引入） | ✅ | 2026-06-14 | HistoryChart, MetricsCard |
 | A10 | 前端项目构建配置验证（Vite + ESLint + Prettier 配置） | ✅ | 2026-06-14 | eslint.config.js, tsconfig.app.json, tsconfig.node.json |
 
 #### 阶段 B：Libs 可插拔层
@@ -1752,11 +1702,11 @@ app/
 | C6 | MetadataEnricher | ✅ | 2026-06-14 | 文档级元数据注入 |
 | C7 | ImageCaptioner | [-] | | 暂不实现 |
 | C8 | DenseEncoder | ✅ | 2026-06-14 | |
-| C9 | SparseEncoder | [ ] | | |
+| C9 | SparseEncoder | ✅ | 2026-06-17 | 从 MODULAR-RAG-MCP-SERVER 迁移，输出 term_frequencies + doc_length |
 | C10 | BatchProcessor | ✅ | 2026-06-14 | |
-| C11 | BM25Indexer（PostgreSQL 全文检索） | ✅ | 2026-06-14 | |
+| C11 | BM25Indexer（自研 BM25 + 磁盘持久化 + 增量更新） | ✅ | 2026-06-17 | SparseEncoder → 倒排索引 → data/db/bm25/{collection}_bm25.json |
 | C12 | VectorUpserter（pgvector 幂等 upsert） | ✅ | 2026-06-14 | |
-| C13 | ImageStorage（图片存储+PostgreSQL 索引） | [ ] | | |
+| C13 | ImageStorage（图片存储+PostgreSQL 索引） | [-]  |            | 暂不实现 |
 | C14 | Pipeline 编排（MVP 串起来） | ✅ | 2026-06-14 | |
 | C15 | 脚本入口 ingest.py | ✅ | 2026-06-14 | |
 
@@ -1766,7 +1716,7 @@ app/
 |---------|---------|------|---------|------|
 | D1 | QueryProcessor（参数验证 + search_mode/top_k/filters） | ✅ | 2026-06-14 | query_processor.py |
 | D2 | DenseRetriever（EmbeddingFactory + PGVectorStore） | ✅ | 2026-06-14 | dense_retriever.py |
-| D3 | SparseRetriever（BM25Indexer 封装） | ✅ | 2026-06-14 | sparse_retriever.py |
+| D3 | SparseRetriever（SparseEncoder + BM25Indexer 封装） | ✅ | 2026-06-17 | jieba 分词 → BM25 倒排索引查询 | sparse_retriever.py |
 | D4 | RRF Fusion（倒数排序融合） | ✅ | 2026-06-14 | rrf_fusion.py |
 | D5 | HybridSearch 编排（Dense→Sparse→RRF→Rerank） | ✅ | 2026-06-14 | hybrid_search.py |
 | D6 | Reranker（Core 层编排 + Fallback） | ✅ | 2026-06-14 | reranker.py |
@@ -1782,58 +1732,37 @@ app/
 | E4 | REST API：数据浏览端点 | ✅ | 2026-06-14 | data.py（documents/chunks/collections/categories/languages） |
 | E5 | REST API：Ingestion 管理端点（含文件类型校验 / 大小限制 / 速率限制） | ✅ | 2026-06-14 | ingestion.py（upload + 校验 + 限流） |
 | E6 | REST API：查询与追踪端点 | ✅ | 2026-06-14 | query.py（search + traces + metrics） |
-| E7 | REST API：评估端点 | ✅ | 2026-06-14 | evaluation.py（testsets + run + results） |
-| E8 | REST API：图片服务端点 | ✅ | 2026-06-14 | images.py（get_image + metadata） |
-| E9 | WebSocket 实时进度推送 | ✅ | 2026-06-14 | main.py 已注册 /api/ws/ingestion/progress |
-| E10 | MCP SSE Transport 集成 | ✅ | 2026-06-14 | server.py（FastMCP + sse_app） |
-| E11 | MCP 工具注册（query_knowledge_hub / list_collections / get_document_summary） | ✅ | 2026-06-14 | 3 个工具已注册 |
-| E12 | 文档管理 API（文档 metadata 更新 / 批量删除 / 重新索引 / 集合管理 / 文档统计） | ✅ | 2026-06-14 | documents.py（CRUD + batch + reindex + stats） |
-| E13 | AI 知识助手 API（问答查询 + 对话历史 CRUD + 对话管理） | ✅ | 2026-06-14 | assistant.py（ask + sessions CRUD） |
-| E14 | 查询缓存层（query result cache + embedding cache，含 TTL 过期 + 自动清理） | ✅ | 2026-06-14 | cache.py（QueryCache + EmbeddingCache + 后台清理协程） |
-| E15 | 数据库连接池调优 + pgvector HNSW 索引 + LLM 调用超时控制 | ✅ | 2026-06-14 | timeout + pool_min/max_size + HNSW 已在 init SQL |
+| E7       | MCP SSE Transport 集成                                       | ✅    | 2026-06-14 | server.py（FastMCP + sse_app）                               |
+| E8       | MCP 工具注册（query_knowledge_hub / list_collections / get_document_summary） | ✅    | 2026-06-14 | 3 个工具已注册                                               |
+| E9       | 文档管理 API（文档 metadata 更新 / 批量删除 / 重新索引 / 集合管理 / 文档统计） | ✅    | 2026-06-14 | documents.py（CRUD + batch + reindex + stats）               |
 
 #### 阶段 F：Trace 基础设施与打点
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| F1 | structlog 配置（JSON 格式 + 固定字段 + service name） | ✅ | 2026-06-14 | |
-| F2 | logrotate 配置 | ✅ | 2026-06-14 | |
+| F1 | 日志框架（Python logging + LogFormatter，JSON 格式 + 固定字段） | ✅ | 2026-06-15 | |
+| F2 | log 配置 | ✅ | 2026-06-14 | |
 | F3 | TraceContext 实现（trace_id / span_id / parent_span_id） | ✅ | 2026-06-14 | |
-| F4 | request_id 中间件（FastAPI 中注入） | ✅ | 2026-06-14 | |
-| F5 | 在 Ingestion + Query 双链路打点 | ✅ | 2026-06-14 | 框架已就绪，实际调用在 C/D 阶段接入 |
-| F6 | Pipeline 进度回调 (on_progress) | ✅ | 2026-06-14 | |
+| F4 | Pipeline 进度回调 (on_progress) | ✅ | 2026-06-14 | |
 
 #### 阶段 G：前端 Dashboard（React 可视化管理平台）
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
 | G1 | Overview + Data Browser 页面（含 category/language 筛选） | ✅ | 2026-06-14 | |
-| G2 | Ingestion Manager + Ingestion Traces 页面 | ✅ | 2026-06-14 | |
-| G3 | Query Traces + Evaluation Panel 页面 | ✅ | 2026-06-14 | |
-| G4 | 图表组件（WaterfallChart / HistoryChart）+ WebSocket 集成 | ✅ | 2026-06-14 | |
+| G2 | Ingestion Manager 页面 | ✅ | 2026-06-14 | Ingestion 追踪面板嵌入 Ingestion Manager | |
+| G3 | Evaluation Panel 页面 | ✅ | 2026-06-14 | Query Traces 功能已合并到 AI 知识检索页面 | |
+| G4 | 图表组件（WaterfallChart / HistoryChart）集成 | ✅ | 2026-06-14 | |
 | G5 | 文档中心页面（文档库管理 + 文件上传 + 批量操作 + 集合管理） | ✅ | 2026-06-14 | |
-| G6 | AI 知识助手页面（对话式问答 + 检索模式切换 + 重排序开关 + 引用溯源 + 对话历史管理） | ✅ | 2026-06-14 | |
+| G6 | AI 知识检索页面（对话式问答 + 检索模式切换 + 重排序开关 + 引用溯源 + 对话历史管理 + 查询历史追踪面板） | ✅ | 2026-06-14 | |
 
 #### 阶段 H：评估体系
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| H1 | RagasEvaluator 实现 | ✅ | 2026-06-16 | ragas 库集成，faithfulness/answer_relevancy/context_precision/context_recall | |
-| H2 | CompositeEvaluator + EvaluatorFactory 实现 | ✅ | 2026-06-16 | 工厂策略模式，组合 Basic + Ragas，预留 deepeval 接入点 | |
-| H3 | EvalRunner + Golden Test Set | ✅ | 2026-06-16 | 支持单查询 + 测试集全量运行 | |
-| H4 | 评估面板页面完善 | ✅ | 2026-06-16 | API + Schema + 前端已对接 | |
-| H5 | Recall 回归测试（E2E，按 category 分层评估） | ✅ | 2026-06-16 | 20 个单元测试通过 | |
+| H1 | 一键评估脚本（eval_oneclick.py） | ✅    | 2026-06-17 | golden dataset + query_traces 双模式，加载黄金测试集批量运行 → ragas 评估 → DB 持久化 → 终端摘要表格 |
 
-#### 阶段 I：端到端验收与文档收口
-
-| 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
-|---------|---------|------|---------|------|
-| I1 | E2E：REST API 调用模拟 | [ ] | | |
-| I2 | E2E：MCP SSE 连接测试 | [ ] | | |
-| I3 | E2E：前端冒烟测试（Playwright） | [ ] | | |
-| I4 | 完善 README（运行说明 + 数据库初始化 + API + MCP + Dashboard） | [ ] | | |
-| I5 | 全链路 E2E 验收 | [ ] | | |
-#### 阶段 J：数据持久化层重构（Repository + SQLAlchemy 2.0 + Alembic）
+#### 阶段I：数据持久化层重构（Repository + SQLAlchemy 2.0 + Alembic）
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
@@ -1845,8 +1774,7 @@ app/
 | J6 | API 层 + Pipeline 层切换为 Repository 调用 | ✅ | 2026-06-14 | 逐个替换，确保行为不变 |
 | J7 | 引入 SQLAlchemy 2.0 async + 定义 ORM 模型 | ✅ | 2026-06-14 | 按当前 schema 精确映射 |
 | J8 | 逐个 Repository 迁移到 SQLAlchemy 2.0 | ✅ | 2026-06-14 | 从 asyncpg 底层切换到 SQLAlchemy Core/ORM |
-| J9 | 引入 Alembic，生成首次基线迁移 | [ ] | | 替换 `init_knowledge_db.sql` |
-| J10 | 引入 Pydantic Schema，API 层改用 Schema | ✅ | 2026-06-16 | data/assistant/ingestion/documents 端点已加 response_model |
+| J9 | 引入 Pydantic Schema，API 层改用 Schema    | ✅    | 2026-06-16 | data/assistant/ingestion/documents 端点已加 response_model |
 
 ---
 
@@ -1857,19 +1785,17 @@ app/
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 10 | 10 | 100% |
-| 阶段 B | 16 | 14 | 88% |
-| 阶段 C | 14 | 12 | 86% |
+| 阶段 B | 19 | 17 | 89% |
+| 阶段 C | 15 | 13 | 87% |
 | 阶段 D | 7 | 7 | 100% |
-| 阶段 E | 15 | 15 | 100% |
-| 阶段 F | 6 | 6 | 100% |
+| 阶段 E | 9 | 9 | 100% |
+| 阶段 F | 4 | 4 | 100% |
 | 阶段 G | 6 | 6 | 100% |
-| 阶段 H | 5 | 5 | 100% |
-| 阶段 I | 5 | 0 | 0% |
-| 阶段 J | 10 | 9 | 90% |
-| **总计** | **94** | **84** | **89%** |
-| **有效数** | **91** | **84** | **92%** | 3 项延期不计入有效任务 |
-| **延期** | **3** | **—** | **—** | B8 / B9 / C7（Vision 多模态等，待条件成熟后实现） |
-
+| 阶段 H | 1 | 1 | 100% |
+| 持久化层重构 | 9 | 9 | 100% |
+| **总计** | **80** | **76** | **95%** |
+| **有效数** | **76** | **76** | **100%** | 4 项延期不计入有效任务 |
+| **延期** | **4** | **—** | **—** | B8 / B9 / C7 / C13（Vision 多模态 + ImageStorage 等，待条件成熟后实现） |
 
 ---
 
@@ -1896,6 +1822,6 @@ app/
 | T8 | 多 Collection 交叉检索 | 中 | 一次查询跨多个知识库 |
 | T9 | 实时文档更新监听 | 低 | 文件系统 Watch + 自动重摄取 |
 | T10 | RBAC 权限控制 | 低 | 多用户 + 文档级权限 |
-| T11 | pg_bm25 索引重建窗口 | 中 | 大量写入后定期重建 BM25 索引，保持检索性能；可选 APScheduler 定时任务 |
+| T11 | BM25 索引重建窗口 | 中 | 磁盘持久化 BM25 支持原子重建：高频写入场景下定期重建；可选启动预热（startup warm-up）|
 | T12 | 配置分离（多环境） | 低 | settings.yaml + settings.local.yaml 分层配置，本地敏感信息不提交到仓库 |
 | T13 | LLM/Embedding 调用 Circuit Breaker | 中 | LLM/Embedding 外部 API 调用添加熔断机制（一期暂不实现） |

@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.ingestion.models import ChunkRecord
-from app.libs.base.base_embedding import EmbeddingResult
-from app.libs.factory import EmbeddingFactory
+from app.factory.base.base_embedding import EmbeddingResult
+from app.factory.factory import EmbeddingFactory
 from app.common.log import get_logger
 
 logger = get_logger(__name__)

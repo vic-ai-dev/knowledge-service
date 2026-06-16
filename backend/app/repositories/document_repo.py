@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy import and_, func, or_, select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.document import Document
+from app.model.entity.document import Document
 from app.repositories.base import BaseRepository
 
 
@@ -33,6 +33,8 @@ class DocumentRepository(BaseRepository[Document]):
         self,
         category: str | None = None,
         language: str | None = None,
+        doc_type: str | None = None,
+        search: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[Document], int]:
@@ -41,6 +43,15 @@ class DocumentRepository(BaseRepository[Document]):
             filters.append(Document.category == category)
         if language:
             filters.append(Document.language == language)
+        if doc_type:
+            filters.append(Document.doc_type == doc_type)
+        if search:
+            filters.append(
+                or_(
+                    Document.source_path.ilike(f'%{search}%'),
+                    Document.title.ilike(f'%{search}%'),
+                )
+            )
 
         total = await self.count(*filters)
         offset = (page - 1) * page_size
@@ -113,6 +124,36 @@ class DocumentRepository(BaseRepository[Document]):
             "by_language": by_language,
             "by_type": by_type,
         }
+
+
+    async def cascade_delete(self, doc_id: str | uuid.UUID) -> bool:
+        """级联删除：IngestionHistory → IngestionTrace → Document (soft delete)。
+
+        注意：PGVector chunks 和 BM25 索引需在外部由调用方清理。
+        """
+        if isinstance(doc_id, str):
+            doc_id = uuid.UUID(doc_id)
+
+        from app.model.entity.ingestion import IngestionHistory, IngestionTrace
+
+        # Delete IngestionHistory
+        await self._session.execute(
+            delete(IngestionHistory).where(IngestionHistory.document_id == doc_id)
+        )
+
+        # Delete IngestionTrace
+        await self._session.execute(
+            delete(IngestionTrace).where(IngestionTrace.document_id == doc_id)
+        )
+
+        # Soft delete Document
+        stmt = (
+            update(Document)
+            .where(and_(Document.id == doc_id, Document.is_deleted == False))
+            .values(is_deleted=True, updated_at=func.now())
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount > 0
 
 
 __all__ = ["DocumentRepository"]

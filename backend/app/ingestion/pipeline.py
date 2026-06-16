@@ -24,11 +24,11 @@ from app.ingestion.models import (
     IngestionStatus,
 )
 from app.ingestion.storage.vector_upserter import VectorUpserter
-from app.libs.base.base_llm import BaseLLM
+from app.factory.base.base_llm import BaseLLM
 from app.common.log import get_logger
 from app.common.enums import DOCTYPE_VALUES, IngestionStatus
 
-from app.observability.progress import (
+from app.common.pipeline_callback import (
     NoOpProgressCallback,
     ProgressCallback,
 )
@@ -166,6 +166,13 @@ class IngestionPipeline:
         for chunk in chunks:
             chunk.document_id = document_id
 
+        # ── 3.6 覆盖 source_path 为文档标题 ─────────────────
+        # document_chunks 表的 source_path 列用于前端展示，
+        # 用文档标题（filename stem）替代完整文件路径。
+        display_title = doc.title or doc.source_path
+        for chunk in chunks:
+            chunk.source_path = display_title
+
         # ── 4. VectorUpserter 写入 pgvector ─────────────────
         logger.info("💾 Stage 6: Storage")
         if chunks:
@@ -183,6 +190,30 @@ class IngestionPipeline:
                         error_message=str(e),
                     )
                 return batch_result
+
+        # ── 4.5 BM25 索引更新 ─────────────────────────────
+        if chunks:
+            try:
+                from app.ingestion.storage.bm25_indexer import BM25Indexer
+                bm25_chunks = [
+                    {
+                        'chunk_id': c.id,
+                        'text': c.text,
+                        'source_path': c.source_path or '',
+                        'doc_id': c.document_id or '',
+                        'category': c.category or '',
+                        'language': c.language or '',
+                        'doc_type': c.doc_type or '',
+                        'metadata': c.metadata or {},
+                    }
+                    for c in chunks
+                ]
+                bm25 = BM25Indexer()
+                await bm25.add_documents(bm25_chunks, doc_id=document_id)
+                logger.info('  ✓ BM25 index updated', chunk_count=len(bm25_chunks))
+            except Exception as e:
+                logger.warning('pipeline_bm25_warn', error=str(e))
+                # 不阻塞主流程
 
         # ── 5. 更新摄入状态 ─────────────────────────────────
         batch_result.document_id = document_id
@@ -222,6 +253,7 @@ class IngestionPipeline:
                 ]
                 await self._integrity.record_ingestion_trace(
                     source_path=doc.source_path,
+                    document_id=str(doc.id),
                     total_latency_ms=sum(s.duration_ms for s in batch_result.stages),
                     status=batch_result.status.value,
                     total_chunks=len(chunks),

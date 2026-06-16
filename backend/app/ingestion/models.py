@@ -16,6 +16,7 @@ class IngestionDocument:
     doc_type: str  # pdf, md, html
     category: str
     language: str  # zh, en
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
     title: str | None = None
     file_size: int | None = None
     file_hash: str | None = None
@@ -26,11 +27,11 @@ class IngestionDocument:
 @dataclass
 class ChunkRecord:
     """摄入管线中的 Chunk 记录。"""
-    chunk_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     document_id: str | None = None
     text: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
     embedding: list[float] | None = None
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
     section_title: str | None = None
     chunk_index: int = 0
     start_offset: int = 0
