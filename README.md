@@ -52,12 +52,12 @@ RAG 知识服务平台 — 前后端分离架构。后端基于 FastAPI 提供 R
 
 > **权衡：** 升级 LLM 可带来 Faithfulness +5-10% 并启用 Answer Relevance 评估，但成本增加 7-23x，延迟 3-5x。适合质量敏感场景（如合规审核），日常场景 deepseek-v4-flash 足够。
 
-#### Embedding — 多方案直接对比
+#### Embedding — 多方案对比
 
 | 维度 | qwen3-embedding:0.6b (当前) | text-embedding-3-large | text-embedding-3-small | BGE-large-en-v1.5 | BGE-m3 | Jina Embeddings v3 |
 |------|---------------------------|----------------------|----------------------|------------------|--------|-------------------|
-| **提供商** | Qwen (Ollama) | OpenAI | OpenAI | BAAI | BAAI | Jina AI |
-| **参数量 / 维度** | 0.6B / 1024 | ~1.5B / 3072 | ~0.5B / 1536 | 0.33B / 1024 | 0.57B / 1024 | 0.57B / 1024 |
+| **提供商** | Qwen | OpenAI | OpenAI | BAAI | BAAI | Jina AI |
+| **参数量 / 维度** | 1024 | 3072 | 1536 | 1024 | 1024 | 1024 |
 | **MTEB 检索** | ~52-55 | **64.6** | 62.3 | 64.0 | **64.5** | ~62 |
 | **C-MTEB 检索 (中文)** | ~58-62 | ~60-63 | ~58-61 | ~56-58 | **~62-64** | ~58-60 |
 | **部署方式** | 本地 Ollama | API | API | 本地 | 本地 | 本地 / API |
@@ -67,17 +67,18 @@ RAG 知识服务平台 — 前后端分离架构。后端基于 FastAPI 提供 R
 | **Context Recall 预期提升** | — | +8-12% | +5-8% | +5-8% | +8-12% | +3-5% |
 
 > **结论：**
+>
 > - **中文为主场景**：BGE-m3 是当前最优升级（C-MTEB 最高，本地零成本，+5-10% Precision，+8-12% Recall）
 > - **英文为主场景**：text-embedding-3-large 最优（MTEB 64.6，3072 维更细粒度）
 > - **成本敏感**：text-embedding-3-small 足够（$0.02/1M tok，¥0.008/千次，几乎免费）
 > - **当前 qwen3-embedding:0.6b** 0.6B 参数量级偏小，中文检索已被 BGE-m3 拉开明显差距，建议升级
 
-#### Reranker — 多方案直接对比
+#### Reranker — 多方案对比
 
-| 维度 | Qwen3-Reranker-0.6B (当前) | Cohere Rerank v3.5 | Voyage Reranker | BGE-Reranker-v2-m3 | Jina Reranker v3 |
+| 维度 | Qwen3-Reranker-0.6B (当前) | Cohere Rerank v3.5 | Voyage Reranker | bge-reranker-large | Jina Reranker v3 |
 |------|---------------------------|-------------------|----------------|-------------------|-----------------|
-| **提供商** | Qwen (Ollama) | Cohere | Voyage AI | BAAI | Jina AI |
-| **参数量** | 0.6B (Q8) | ~2B (闭源) | ~1B (闭源) | 568M | ~0.6B |
+| **提供商** | Qwen | Cohere | Voyage AI | BAAI | Jina AI |
+| **参数量** | 0.6B (Q8) | ~2B (闭源) | ~1B (闭源) | 1.5B | ~0.6B |
 | **NDCG@10 基准** | — | +10-18% | +8-12% | +8-14% | +8-12% |
 | **Context Precision 预期提升** | — | +8-15% | +6-10% | +8-12% | +6-10% |
 | **Context Recall 预期提升** | — | +5-8% | +3-5% | +5-8% | +3-5% |
@@ -85,14 +86,14 @@ RAG 知识服务平台 — 前后端分离架构。后端基于 FastAPI 提供 R
 | **部署方式** | 本地 Ollama | API | API | 本地部署 | 本地 / API |
 | **每 1K 次成本** | ¥0 | **$2 (≈¥14.5)** | $0.50 (≈¥3.6) | **¥0 (本地)** | ¥0 (本地) |
 | **推理延迟** | ~20-50ms | ~100-300ms | ~80-200ms | ~50-100ms | ~20-50ms |
-| **VRAM 需求** | < 1GB | 无 (API) | 无 (API) | ~6GB | ~1.5GB |
+| **VRAM 需求** | < 1GB | 无 (API) | 无 (API) | ~10GB | ~1.5GB |
 
 > **结论：**
-> - **中文为主 + 本地部署**：**BGE-Reranker-v2-m3** 综合最优（中文效果顶尖，本地零成本，+8-12% Precision）
+> - **中文为主 + 本地部署**：**bge-reranker-large** 综合最优（中文效果顶尖，本地零成本，+8-12% Precision）
 > - **英文为主 + 质量优先**：**Cohere Rerank v3.5** NDCG 最高 (+10-18%)，但需承担 $2/千次成本
 > - **混合场景 + 低预算**：**Voyage Reranker** 性价比平衡 ($0.50/千次)
 > - **资源受限**：**Jina Reranker v3** VRAM 仅需 1.5GB，延迟最低，适合边缘部署
-> - **当前 Qwen3-Reranker-0.6B** 量化 0.6B 参数量级过小，NDCG 显著低于主流方案，建议至少升级到 BGE-Reranker-v2-m3
+> - **当前 Qwen3-Reranker-0.6B** 量化 0.6B 参数量级过小，NDCG 显著低于主流方案，建议至少升级到 bge-reranker-large
 
 ---
 
@@ -123,13 +124,13 @@ RAG 知识服务平台 — 前后端分离架构。后端基于 FastAPI 提供 R
 | **Qwen3-Reranker-0.6B** (当前) | ¥0 (本地) | **≈ ¥0** |
 | Cohere Rerank v3.5 | $2/1K 查询 | **$2.00 (≈ ¥14.5)** |
 | Voyage Reranker | $0.50/1K 查询 | **$0.50 (≈ ¥3.6)** |
-| BGE-Reranker-v2-m3 | ¥0 (本地) | **≈ ¥0** |
+| bge-reranker-large | ¥0 (本地) | **≈ ¥0** |
 | Jina Reranker v3 | ¥0 (本地) | **≈ ¥0** |
 
 > **综合对比：**
 > - **当前全链路**（deepseek-v4-flash + qwen3-embedding + Qwen3-Reranker）：**¥9.6/千次**
 > - **SOTA 全链路**（GPT-5 + text-embedding-3-large + Cohere Rerank v3.5）：**¥86-¥208/千次**（9-22x）
-> - **推荐升级链路**（deepseek-v4-flash + BGE-m3 + BGE-Reranker-v2-m3，均本地）：**¥9.6/千次**（成本不变，中文检索 +8-12%）
+> - **推荐升级链路**（deepseek-v4-flash + BGE-m3 + bge-reranker-large，均本地）：**¥9.6/千次**（成本不变，中文检索 +8-12%）
 
 ---
 
@@ -138,7 +139,7 @@ RAG 知识服务平台 — 前后端分离架构。后端基于 FastAPI 提供 R
 | 优先级 | 升级项 | 影响指标 | 预期提升 | 额外成本 | 建议 |
 |--------|-------|---------|---------|---------|------|
 | **P0** | Embedding → BGE-m3 | Context Precision, Context Recall | +5-10%, +8-12% | ¥0 (本地) | **立即升级** |
-| **P1** | Reranker → BGE-Reranker-v2-m3 | Context Precision, Context Recall | +8-12%, +5-8% | ¥0 (+6GB VRAM) | **立即升级** |
+| **P1** | Reranker → bge-reranker-large | Context Precision, Context Recall | +8-12%, +5-8% | ¥0 (+10GB VRAM) | **立即升级** |
 | **P2** | LLM → GPT-5 (质量场景) | Faithfulness, Answer Relevance | +5-10%, 可评估 | 7-20x | 按需切换，日常不启用 |
 | **P3** | Reranker → Cohere Rerank v3.5 | Context Precision | +10-18% | ¥14.5/千次 | 英文质量敏感场景启用 |
 
