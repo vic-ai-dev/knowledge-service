@@ -292,6 +292,26 @@ npm run dev
 
 前端默认运行在 `http://localhost:5173`。
 
+
+## 界面预览
+
+### 系统总览 / Dashboard
+
+<img src="snapshot/snapshot_系统总览.png" width="90%" alt="系统总览 Dashboard" />
+
+### 文档中心 & AI 知识助手
+
+| 文档中心 (Document Center) | AI 知识助手 (Knowledge Assistant) |
+|---------------------------|----------------------------------|
+| <img src="snapshot/snapshot_文档中心.png" width="100%" alt="文档中心" /> | <img src="snapshot/snapshot_知识检索.png" width="100%" alt="AI 知识助手" /> |
+
+### 检索详情 & 文档 Chunk
+
+| Top-K 检索结果详情 | 文档 Chunk 查看 |
+|-----------------|---------------|
+| <img src="snapshot/snapshot_知识检索topk.png" width="100%" alt="Top-K 检索结果" /> | <img src="snapshot/snapshot_文档chunk.png" width="100%" alt="文档 Chunk" /> |
+
+
 ## 测试知识库文件
 
 测试知识库文件位于项目根目录的 `test_document/`，用于上传测试和索引验证：
