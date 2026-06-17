@@ -24,7 +24,7 @@ RAG 知识服务平台 — 前后端分离架构。后端基于 FastAPI 提供 R
 
 | 层级 | 技术 |
 |------|------|
-| **后端** | Python 3.13, FastAPI 0.115+, uvicorn, SQLAlchemy 2.0+asyncio, asyncpg, alembic, pydantic, structlog, OpenTelemetry, httpx |
+| **后端** | Python 3.13, FastAPI, uvicorn, SQLAlchemy 2.0, pydantic |
 | **前端** | React 19, TypeScript 6, Vite 8, Ant Design 5, axios, recharts, react-router-dom 7 |
 | **RAG** | pgvector (向量检索), rank_bm25 (稀疏检索), LangChain 1.3 + text-splitters, Ragas 0.4.3, sentence-transformers, markitdown (文档解析) |
 | **搜索** | 混合检索 (RRF 融合算法) + Cross-Encoder 重排序 |
@@ -38,14 +38,16 @@ knowledge-service/
 ├── backend/                       # FastAPI 后端 (uv 管理)
 │   ├── app/                       # 应用代码
 │   │   ├── api/                   # REST API 路由层
-│   │   ├── common/                # 枚举、常量、工具函数
-│   │   ├── core/                  # 核心业务逻辑 (QueryEngine, HybridSearch)
-│   │   ├── factory/               # 工厂与策略模式 (Loader / Chunker / Retriever / Evaluator)
-│   │   ├── ingestion/             # 文档摄取管道 (Pipeline, Storage, Integrity)
-│   │   ├── libs/                  # 外部服务封装 (LLM / Embedding / VectorStore)
+│   │   ├── common/                # 枚举、常量、配置、日志、工具函数
+│   │   ├── core/                  # 核心基础设施（预留）
+│   │   ├── factory/               # 工厂与策略模式 (LLM / Embedding / Loader /
+│   │   │                          #   Splitter / Reranker / Evaluator / VectorStore)
+│   │   ├── ingestion/             # 文档摄取管道 (Pipeline / Chunking / Embedding /
+│   │   │                          #   Storage / Transform / Integrity)
 │   │   ├── mcp_server/            # MCP SSE Transport
 │   │   ├── model/                 # ORM 实体 + Pydantic DTO
-│   │   ├── query_engine/          # 查询引擎 (Dense / Sparse / Hybrid Retrieval)
+│   │   ├── query_engine/          # 查询引擎 (Dense / Sparse / Hybrid 检索 +
+│   │   │                          #   RRF 融合 + 重排序)
 │   │   ├── repositories/          # 数据访问层 (SQLAlchemy Repository)
 │   │   ├── logs/                  # 运行时日志
 │   │   └── main.py                # FastAPI 入口
