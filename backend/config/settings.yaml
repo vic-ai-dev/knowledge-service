@@ -1,0 +1,104 @@
+# =============================================================================
+# Knowledge Service — 系统配置
+# =============================================================================
+
+# ===== 数据库配置 =====
+database:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: 
+  database: knowledge
+  max_connections: 10
+
+vector_store:
+  backend: pgvector
+  host: localhost
+  port: 5432
+  user: postgres
+  password: 
+  database: knowledge_rag
+  table_name: document_chunks
+  embedding_dimensions: 1024
+
+
+# =============================================================================
+# LLM Configuration
+# =============================================================================
+llm:
+  provider: "deepseek"  # OpenAI-compatible endpoint
+  model: "deepseek-v4-flash"
+  api_key: ""
+  base_url: ""
+  temperature: 0.0
+  max_tokens: 10000
+
+# =============================================================================
+# Embedding Configuration
+# =============================================================================
+embedding:
+  provider: "ollama"  # Options: openai, azure, ollama
+  model: "qwen3-embedding:0.6b"
+  dimensions: 1024
+  api_key: "ollama"
+  base_url: "http://127.0.0.1:11434/v1"
+
+# =============================================================================
+# Rerank Configuration
+# =============================================================================
+rerank:
+  provider: "ollama"  # Options: openai, azure, ollama
+  model: "dengcao/Qwen3-Reranker-0.6B:Q8_0"
+  enabled: true
+  top_k: 3
+  api_key: "ollama"
+  base_url: "http://127.0.0.1:11434/v1"
+
+# ===== 分块策略 =====
+splitter:
+  markdown:
+    type: markdown_header
+    headers_to_split_on: [["#", "h1"], ["##", "h2"], ["###", "h3"]]
+    chunk_size: 1000
+    chunk_overlap: 200
+  html:
+    type: html_header
+    headers_to_split_on: [["h1", "h1"], ["h2", "h2"], ["h3", "h3"]]
+    chunk_size: 1000
+    chunk_overlap: 200
+  default:
+    type: recursive_character
+    chunk_size: 1000
+    chunk_overlap: 200
+    separators: ["\n\n", "\n", ".", "!", "?", ",", " ", ""]
+
+# ===== 检索配置 =====
+retrieval:
+  sparse_backend: rank_bm25
+  fusion_algorithm: rrf
+  rerank_backend: cross_encoder  # none | cross_encoder | llm
+
+# ===== 稀疏检索配置 =====
+sparse_search:
+  backend: local                   # local | elasticsearch
+  index_dir: data/bm25
+
+# ===== 评估配置 =====
+evaluation:
+  backends: [ragas, custom_metrics]
+
+# ===== 可观测性 =====
+observability:
+  enabled: true
+  tracing:
+    enabled: false     # 设为 false 可隐藏 trace_id / span_id / request_id（本地开发用）
+  logging:
+    log_file: logs/service.jsonl
+    log_level: DEBUG
+    service_name: knowledge_service
+
+# ===== 服务配置 =====
+server:
+  port: 8000
+  max_file_size: 52428800
+  allowed_extensions: ["pdf", "md", "html"]
