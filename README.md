@@ -6,13 +6,13 @@ RAG 知识服务平台 — 前后端分离架构。后端基于 FastAPI 提供 R
 
 ```
 ┌──────────────┐     HTTP REST      ┌──────────────────────┐     SQL     ┌──────────────┐
-│  React SPA   │ ──────────────────▶│    FastAPI Server    │────────────▶│  PostgreSQL  │
+│  React       │ ──────────────────▶│    FastAPI Server    │────────────▶│  PostgreSQL  │
 │  (Vite 5173) │◀───────────────────│  (localhost:8000)    │◀────────────│  knowledge   │
 └──────────────┘     JSON Response   │                      │             │  knowledge_rag│
                                      │  ┌────────────────┐  │             └──────────────┘
 ┌──────────────┐     MCP SSE         │  │  RAG Engine     │  │
 │  MCP Client  │ ──────────────────▶│  │  - Ingestion    │  │
-│ (Copilot)    │◀───────────────────│  │  - Query Engine │  │
+│              │◀───────────────────│  │  - Query Engine │  │
 └──────────────┘   /mcp/sse          │  │  - Evaluation   │  │
                                      │  └────────────────┘  │
                                      └──────────────────────┘
